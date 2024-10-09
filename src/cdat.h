@@ -68,7 +68,7 @@ DAT_RET dat_file_destroy(DatFile *dat);
 // `file` can be safely freed after this. All data is copied to internal allocations.
 DAT_RET dat_file_import(const uint8_t *file, uint32_t size, DatFile *out);
 
-// `dat` must not be NULL.
+// Asserts invariants.
 uint32_t dat_file_export_max_size(const DatFile *dat);
 
 DAT_RET dat_file_export(const DatFile *dat, uint8_t *out);

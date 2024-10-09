@@ -134,6 +134,7 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t size, DatFile *out) {
 }
 
 uint32_t dat_file_export_max_size(const DatFile *dat) {
+    assert(dat != NULL);
     uint32_t size = 0x20;
     size += dat->data_size;
     size += (uint32_t)(dat->reloc_count * sizeof(DatRef));
