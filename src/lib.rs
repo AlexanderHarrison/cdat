@@ -101,7 +101,6 @@ impl DatFile {
                 symbol_offset: read_u32(dat_file, root_offset+ i*8 + 4),
             });
         }
-        //roots.sort_by_key(|r| r.obj_offset);
 
         // external ref table ----------
 
@@ -115,7 +114,6 @@ impl DatFile {
                 symbol_offset: read_u32(dat_file, ref_offset+ i*8 + 4),
             });
         }
-        //extern_refs.sort_by_key(|r| r.obj_offset);
 
         // symbol table -----------------
 
