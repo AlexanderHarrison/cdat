@@ -318,7 +318,11 @@ DAT_RET dat_obj_set_ref(DatFile *dat, DatRef from, DatRef to) {
             if (err) return err;
         }
 
-        memmove(&dat->reloc_targets[reloc_idx+1], &dat->reloc_targets[reloc_idx], count-reloc_idx);
+        memmove(
+            &dat->reloc_targets[reloc_idx+1],
+            &dat->reloc_targets[reloc_idx],
+            (count-reloc_idx) * sizeof(*dat->reloc_targets)
+        );
 
         dat->reloc_targets[reloc_idx] = from;
         dat->reloc_count++;
@@ -334,7 +338,11 @@ DAT_RET dat_obj_remove_ref(DatFile *dat, DatRef from) {
     if (from & 3) return DAT_ERR_INVALID_ALIGNMENT;
 
     uint32_t reloc_idx = dat_file_reloc_idx(dat, from);
-    memmove(&dat->reloc_targets[reloc_idx], &dat->reloc_targets[reloc_idx+1], dat->reloc_count-reloc_idx-1);
+    memmove(
+        &dat->reloc_targets[reloc_idx],
+        &dat->reloc_targets[reloc_idx+1],
+        (dat->reloc_count-reloc_idx-1) * sizeof(*dat->reloc_targets)
+    );
     dat->reloc_count--;
 
     return DAT_SUCCESS;
@@ -417,7 +425,11 @@ DAT_RET dat_root_add(DatFile *dat, uint32_t index, DatRef root_obj, const char *
         if (err) return err;
     }
 
-    memmove(&dat->root_info[index+1], &dat->root_info[index], root_count-index);
+    memmove(
+        &dat->root_info[index+1],
+        &dat->root_info[index],
+        (root_count-index) * sizeof(*dat->root_info)
+    );
 
     dat->root_info[index] = (DatRootInfo) {
         .data_offset = root_obj,
@@ -433,7 +445,11 @@ DAT_RET dat_root_remove(DatFile *dat, uint32_t index) {
     uint32_t root_count = dat->root_count;
     if (index >= root_count) return DAT_ERR_OUT_OF_BOUNDS;
 
-    memmove(&dat->reloc_targets[index], &dat->reloc_targets[index+1], dat->root_count-index-1);
+    memmove(
+        &dat->root_info[index],
+        &dat->root_info[index+1],
+        (root_count-index-1) * sizeof(*dat->root_info)
+    );
     dat->root_count--;
 
     return DAT_SUCCESS;
@@ -489,7 +505,7 @@ DAT_RET dat_obj_copy(DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out
     while (1) {
         // find next child ref
         if (reloc_i == src->reloc_count) break;
-        DatRef src_child_ref_offset = dst->reloc_targets[reloc_i];
+        DatRef src_child_ref_offset = src->reloc_targets[reloc_i];
         if (src_child_ref_offset >= obj_end) break;
         
         // copy child object

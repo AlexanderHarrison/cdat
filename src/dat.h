@@ -56,6 +56,7 @@ typedef struct DatFile {
     DatRef *reloc_targets;
     DatRootInfo *root_info;
     DatExternInfo *extern_info;
+    
     char *symbols;
     DatRef *objects; // TODO change to slice
 
