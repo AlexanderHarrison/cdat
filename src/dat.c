@@ -483,11 +483,10 @@ DAT_RET dat_obj_location(const DatFile *dat, DatRef ptr, DatSlice *out) {
     return DAT_SUCCESS;
 }
 
-DAT_RET dat_obj_copy(DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out) {
-    if (dst == NULL) return DAT_ERR_NULL_PARAM;
-    if (src == NULL) return DAT_ERR_NULL_PARAM;
-    if (src_ref >= src->data_size) return DAT_ERR_OUT_OF_BOUNDS;
-    
+DAT_RET dat_obj_copy_inner(
+    DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out,
+    DatRef *src_lookup, DatRef *dst_lookup, uint32_t *lookup_count 
+) {
     // find src object location
     DatSlice obj_location;
     DAT_RET err = dat_obj_location(src, src_ref, &obj_location);
@@ -498,6 +497,10 @@ DAT_RET dat_obj_copy(DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out
     dat_obj_alloc(dst, obj_location.size, &dst_ref);
     *dst_out = dst_ref;
     memcpy(&dst->data[dst_ref], &src->data[src_ref], obj_location.size);
+            
+    src_lookup[*lookup_count] = src_ref;
+    dst_lookup[*lookup_count] = dst_ref;
+    (*lookup_count)++;
     
     // Recursively copy child objects
     DatRef obj_end = obj_location.offset + obj_location.size;
@@ -508,12 +511,29 @@ DAT_RET dat_obj_copy(DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out
         DatRef src_child_ref_offset = src->reloc_targets[reloc_i];
         if (src_child_ref_offset >= obj_end) break;
         
-        // copy child object
+        // read child object offset
         DatRef dst_child_ref, src_child_ref;
         err = dat_obj_read_ref(src, src_child_ref_offset, &src_child_ref);
         if (err) return err;
-        err = dat_obj_copy(dst, src, src_child_ref, &dst_child_ref);  
-        if (err) return err;
+        
+        // check if already copied
+        bool found = false;
+        for (uint32_t i = 0; i < *lookup_count; ++i) {
+            if (src_lookup[i] == src_child_ref) {
+                found = true;
+                dst_child_ref = dst_lookup[i];
+                break;
+            }
+        }
+        
+        if (!found) {
+            // copy child object
+            err = dat_obj_copy_inner(
+                dst, src, src_child_ref, &dst_child_ref,
+                src_lookup, dst_lookup, lookup_count
+            );
+            if (err) return err;
+        }
         
         // replace with new child pointer
         DatRef dst_child_ref_offset = dst_ref + src_child_ref_offset - obj_location.offset;  
@@ -524,6 +544,29 @@ DAT_RET dat_obj_copy(DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out
     }
     
     return DAT_SUCCESS;
+}
+
+DAT_RET dat_obj_copy(DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out) {
+    if (dst == NULL) return DAT_ERR_NULL_PARAM;
+    if (src == NULL) return DAT_ERR_NULL_PARAM;
+    if (src_ref >= src->data_size) return DAT_ERR_OUT_OF_BOUNDS;
+    
+    // Create object list for deduplicating children
+    // TODO: change to hash table or sort - something not O(n)
+    uint32_t object_array_size = src->object_count * sizeof(DatRef);  
+    uint8_t *buf = malloc(object_array_size * 2);
+    DatRef *src_lookup = (DatRef*)buf;
+    DatRef *dst_lookup = (DatRef*)(buf + object_array_size);
+    uint32_t lookup_count = 0;
+    
+    DAT_RET ret = dat_obj_copy_inner(
+        dst, src, src_ref, dst_out,
+        src_lookup, dst_lookup, &lookup_count
+    );
+    
+    free(buf); 
+    
+    return ret;
 }
 
 const char *dat_return_string(DAT_RET ret) {

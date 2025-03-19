@@ -136,8 +136,10 @@ int main(void) {
         DAT_TEST(dat_obj_alloc(&dat, 64, &ref4));
         
         DAT_TEST(dat_obj_set_ref(&dat, ref1 + 0x0, ref2));
+        DAT_TEST(dat_obj_set_ref(&dat, ref2 + 0x0, ref2));
         DAT_TEST(dat_obj_set_ref(&dat, ref2 + 0x4, ref3));
         DAT_TEST(dat_obj_set_ref(&dat, ref2 + 0x8, ref4));
+        DAT_TEST(dat_obj_set_ref(&dat, ref4 + 0x0, ref1));
         
         DatFile dst;
         DatRef dst_ref1;
@@ -145,15 +147,59 @@ int main(void) {
         DAT_TEST(dat_obj_copy(&dst, &dat, ref1, &dst_ref1));
         
         EXPECT(dst.object_count == 4);
-        EXPECT(dst.reloc_count == 3);
+        EXPECT(dst.reloc_count == 5);
         
         EXPECT(dst.objects[0] == 0);
         EXPECT(dst.objects[1] == 64);
         EXPECT(dst.objects[2] == 128);
         EXPECT(dst.objects[3] == 192);
         
+        DatRef reloc1, reloc2, reloc3, reloc4, reloc5;
+        DAT_TEST(dat_obj_read_ref(&dst, dst.reloc_targets[0], &reloc1));
+        DAT_TEST(dat_obj_read_ref(&dst, dst.reloc_targets[1], &reloc2));
+        DAT_TEST(dat_obj_read_ref(&dst, dst.reloc_targets[2], &reloc3));
+        DAT_TEST(dat_obj_read_ref(&dst, dst.reloc_targets[3], &reloc4));
+        DAT_TEST(dat_obj_read_ref(&dst, dst.reloc_targets[4], &reloc5));
+        
+        EXPECT(reloc1 == dst.objects[1]);
+        EXPECT(reloc2 == dst.objects[1]);
+        EXPECT(reloc3 == dst.objects[2]);
+        EXPECT(reloc4 == dst.objects[3]);
+        EXPECT(reloc5 == dst.objects[0]);
+        
         DAT_TEST(dat_file_destroy(&dst));
     }
+    
+    {
+        test_name = "import / export";
+        
+        uint32_t export_max_size = dat_file_export_max_size(&dat);
+        uint8_t *data = malloc(export_max_size);
+        uint32_t export_size;
+        DAT_TEST(dat_file_export(&dat, data, &export_size));
+        EXPECT(export_size <= export_max_size);
+        
+        DatFile new;
+        DAT_TEST(dat_file_import(data, export_size, &new));
+        
+        EXPECT(new.data_size == dat.data_size);
+        EXPECT(new.reloc_count == dat.reloc_count);
+        EXPECT(new.root_count == dat.root_count);
+        EXPECT(new.extern_count == dat.extern_count);
+        EXPECT(new.symbol_size == dat.symbol_size);
+        
+        EXPECT(memcmp(new.data, dat.data, new.data_size) == 0);
+        EXPECT(memcmp(new.reloc_targets, dat.reloc_targets, new.reloc_count*sizeof(*new.reloc_targets)) == 0);
+        EXPECT(memcmp(new.root_info, dat.root_info, new.root_count*sizeof(*new.root_info)) == 0);
+        // These are null at the moment, memcmp doesn't like that
+        //EXPECT(memcmp(new.extern_info, dat.extern_info, new.extern_count*sizeof(*new.extern_info)) == 0);
+        EXPECT(memcmp(new.symbols, dat.symbols, new.symbol_size) == 0);
+        
+        DAT_TEST(dat_file_destroy(&new));
+        free(data);
+    }
+    
+    dat_file_debug_print(&dat);
     
     DAT_TEST(dat_file_destroy(&dat));
 }

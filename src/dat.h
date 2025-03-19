@@ -126,10 +126,8 @@ DAT_RET dat_root_add(DatFile *dat, uint32_t index, DatRef root_obj, const char *
 // Removes the root at the specified index.
 DAT_RET dat_root_remove(DatFile *dat, uint32_t root_index);
 
-// Recursively copies the source object to the reference destination dat file.
-// Puts a reference to the copied object in dst_out, ignored if NULL.
-//
-// The source object must not be recursive (for now)
+// Copies the source object and all its children to the reference destination dat file.
+// Puts a reference to the copied object in dst_out.
 DAT_RET dat_obj_copy(DatFile *dst, DatFile *src, DatRef src_ref, DatRef *dst_out);
 
 #endif
