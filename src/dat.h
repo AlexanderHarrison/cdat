@@ -87,7 +87,10 @@ DAT_RET dat_file_new(DatFile *dat);
 DAT_RET dat_file_destroy(DatFile *dat);
 
 // `file` can be safely freed after this. All data is copied to internal allocations.
-DAT_RET dat_file_import(const uint8_t *file, uint32_t size, DatFile *out);
+// The size parameter is the size of the buffer containing the dat file, which must be larger
+// than the internal file size listed in the dat file header.
+// If it is smaller, DAT_ERR_INVALID_SIZE will be returned. 
+DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out);
 
 // `dat` must not be NULL.
 uint32_t dat_file_export_max_size(const DatFile *dat);

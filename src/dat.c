@@ -38,7 +38,7 @@ static DAT_RET realloc_arr(void **arr, uint32_t *prev_cap, uint32_t ele_size) {
     return DAT_SUCCESS;
 }
 
-DAT_RET dat_file_import(const uint8_t *file, uint32_t size, DatFile *out) {
+DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out) {
     if (file == NULL) return DAT_ERR_NULL_PARAM;
     if (out == NULL) return DAT_ERR_NULL_PARAM;
     dat_file_new(out);
@@ -51,10 +51,8 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t size, DatFile *out) {
     uint32_t root_count   = READ_U32(file + 12);
     uint32_t extern_count = READ_U32(file + 16);
 
-    if (file_size != size) {
-        printf("File size mismatch! found %u, expected %u!\n", file_size, size);
+    if (file_size > buffer_size)
         return DAT_ERR_INVALID_SIZE;
-    }
 
     // data  ---------------------
 

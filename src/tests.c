@@ -199,7 +199,26 @@ int main(void) {
         free(data);
     }
     
-    dat_file_debug_print(&dat);
+    {
+        test_name = "import ssbm grps dat";
+        
+        // file io
+        FILE *grps_f = fopen("GrPs.dat", "r");
+        EXPECT(fseek(grps_f, 0, SEEK_END) >= 0);
+        int64_t ftell_ret = ftell(grps_f);
+        EXPECT(ftell_ret > 0);
+        EXPECT(fseek(grps_f, 0, SEEK_SET) >= 0);
+        uint32_t grps_size = (uint32_t)ftell_ret; 
+        uint8_t *grps_buf = malloc(grps_size);
+        EXPECT(grps_buf != NULL);
+        EXPECT(fread(grps_buf, grps_size, 1, grps_f) == 1);
+        
+        DatFile grps;
+        DAT_TEST(dat_file_import(grps_buf, grps_size, &grps));
+        
+        DAT_TEST(dat_file_destroy(&grps));
+        free(grps_buf);
+    }
     
     DAT_TEST(dat_file_destroy(&dat));
 }
