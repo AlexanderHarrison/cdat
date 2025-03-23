@@ -129,9 +129,9 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out)
     for (uint32_t i = 0; i < out->reloc_count; ++i)
         out->objects[object_i++] = READ_U32(&out->data[out->reloc_targets[i]]);
     for (uint32_t i = 0; i < out->root_count; ++i)
-        out->objects[object_i++] = READ_U32(&out->data[out->root_info[i].data_offset]);
+        out->objects[object_i++] = out->root_info[i].data_offset;
     for (uint32_t i = 0; i < out->extern_count; ++i)
-        out->objects[object_i++] = READ_U32(&out->data[out->extern_info[i].data_offset]);
+        out->objects[object_i++] = out->extern_info[i].data_offset;
     qsort(out->objects, object_i, sizeof(DatRef), reloc_cmp);
     
     // deduplicate refs
@@ -232,7 +232,6 @@ DAT_RET dat_file_debug_print(DatFile *dat) {
     if (dat == NULL) return DAT_ERR_NULL_PARAM;
 
     printf("DEBUG DAT @ %p:\n", (void*)dat);
-
     printf("  data          %p\n", (void*)dat->data         );
     printf("  reloc_targets %p\n", (void*)dat->reloc_targets);
     printf("  root_info     %p\n", (void*)dat->root_info    );
@@ -246,6 +245,7 @@ DAT_RET dat_file_debug_print(DatFile *dat) {
     printf("  extern_count    %u\n", dat->extern_count   );
     printf("  symbol_size     %u\n", dat->symbol_size    );
     printf("  object_count    %u\n", dat->object_count   );
+    
     printf("  data_capacity   %u\n", dat->data_capacity  );
     printf("  reloc_capacity  %u\n", dat->reloc_capacity );
     printf("  root_capacity   %u\n", dat->root_capacity  );
@@ -256,6 +256,12 @@ DAT_RET dat_file_debug_print(DatFile *dat) {
     printf("  ROOTS:\n");
     for (uint32_t i = 0; i < dat->root_count; ++i) {
         DatRootInfo info = dat->root_info[i];
+        printf("    %06x %s\n", info.data_offset, &dat->symbols[info.symbol_offset]);
+    }
+    
+    printf("  EXTERNAL REFS:\n");
+    for (uint32_t i = 0; i < dat->extern_count; ++i) {
+        DatExternInfo info = dat->extern_info[i];
         printf("    %06x %s\n", info.data_offset, &dat->symbols[info.symbol_offset]);
     }
     

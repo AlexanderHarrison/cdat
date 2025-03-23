@@ -236,6 +236,23 @@ int main(void) {
         DatFile grps;
         DAT_TEST(dat_file_import(grps_buf, grps_size, &grps));
         
+        for (uint32_t i = 0; i < grps.object_count; ++i) {
+            DatRef object = grps.objects[i];
+            EXPECT(object < grps.data_size);
+        }
+         
+        for (uint32_t i = 0; i < grps.root_count; ++i) {
+            DatRootInfo root = grps.root_info[i];
+            EXPECT(root.data_offset < grps.data_size);
+            EXPECT(root.symbol_offset < grps.symbol_size);
+        }
+         
+        for (uint32_t i = 0; i < grps.extern_count; ++i) {
+            DatExternInfo ext = grps.extern_info[i];
+            EXPECT(ext.data_offset < grps.data_size);
+            EXPECT(ext.symbol_offset < grps.symbol_size);
+        } 
+        
         DAT_TEST(dat_file_destroy(&grps));
         free(grps_buf);
     }
