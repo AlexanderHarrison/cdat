@@ -5,7 +5,7 @@
 
 #define USAGE "\
 USAGE:\n\
-    dat_mod tree <dat file>\n\
+    dat_mod debug <dat file>\n\
     dat_mod extract <dat file> <root name> [out root name]\n\
 "
 
@@ -26,7 +26,7 @@ int main(int argc, const char *argv[]) {
     }
     
     bool parse_err = false;
-    bool list_roots = false;
+    bool debug = false;
     bool copy_root = false;
     bool save = false;
     char *dat_path_in = NULL;
@@ -37,8 +37,8 @@ int main(int argc, const char *argv[]) {
     // Parse arguments ------------------------------
 
     const char *arg1 = argv[1];
-    if (strcmp(arg1, "tree") == 0) {
-        list_roots = true;
+    if (strcmp(arg1, "debug") == 0) {
+        debug = true;
         if (argc < 3) {
             parse_err = true;
             fprintf(stderr, USAGE);
@@ -113,13 +113,8 @@ int main(int argc, const char *argv[]) {
     
     // Run Commands --------------------------------------
     
-    if (list_roots) {
-        for (int64_t root_i = 0; root_i < dat_in->root_count; ++root_i) {
-            DatRootInfo *root = &dat_in->root_info[root_i];
-            char *root_name = dat_in->symbols + root->symbol_offset;
-            printf("%s\n", root_name);
-        }
-    }
+    if (debug)
+        dat_file_debug_print(dat_in);
     
     if (copy_root) {
         DatRef copied_root;
@@ -156,12 +151,13 @@ File read_file(const char* filepath) {
 
     if (size != 0 && fread(ptr, size, 1, f) != 1) goto ERR;
 
-    if (fclose(f) != 0) goto ERR;
+    if (fclose(f) != 0) goto ERR_NO_FCLOSE;
 
     return (File) { ptr, size };
 
 ERR:
     if (f) fclose(f);
+ERR_NO_FCLOSE:
     if (ptr) free(ptr);
     return (File) { NULL, 0 };
 }

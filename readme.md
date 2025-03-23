@@ -1,14 +1,15 @@
-# CDat
+# What's in this repo?
 
-CDat provides a portable, simple, and fast way to read, edit, and modify Melee's DAT files.
+- **cdat** (src/dat.c src/dat.h): a simple, portable library for reading, modifying, and saving dat files.
+- **hmex** (src/hmex.c): a fast, portable reimplementation of MexTK. 
 
-## Comparison with [HSDRaw](https://github.com/Ploaj/HSDLib/)
-HSDRaw is huge and much more mature than CDat.
-It has a GUI for editing DAT files, parsing for every common built-in type,
-a viewer and editor for textures and models,
-and import and export functionality for common model formats.
+## [HSDRaw](https://github.com/Ploaj/HSDLib/) vs cdat
+HSDRaw and cdat serve different purposes.
+HSDRaw is specifically tuned for melee's dat files and their object types.
+cdat does not care or know about the object types contained inside dat files.
+Another HSDRaw could be built on top of cdat, using cdat to read and modify dat files.
 
-However, HSDRaw is extremely buggy and astonishingly slow.
-I find a new issue or crash with it every time I try to use it.
-The GUI does not work platforms other than Linux,
-and it took me a fork and custom code to make the library work on linux.
+For example, if you want to modify some fighter attribute such as air speed,
+then HSDRaw provides a super simple way to do this - just open up the character dat and set the air speed value.
+In cdat, you will need to know exactly the root object and chain of 
+references to get to the attribute you want to modify - it does not provide the path to the air speed value. 

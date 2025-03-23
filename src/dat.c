@@ -58,8 +58,8 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out)
 
     out->data_size = data_size;
     // realloc would be expensive
-    if (data_size < 0x40000000)
-        out->data_capacity = 0x10000000; // 256 KB
+    if (data_size < 0x40000)
+        out->data_capacity = 0x40000; // 256 KB
     else
         out->data_capacity = data_size;
     out->data = malloc(out->data_capacity);
@@ -380,8 +380,8 @@ DAT_RET dat_obj_write_u32(DatFile *dat, DatRef ptr, uint32_t num) {
     if (dat == NULL) return DAT_ERR_NULL_PARAM;
     if (ptr & 3) return DAT_ERR_INVALID_ALIGNMENT;
     if (ptr + 4 > dat->data_size) return DAT_ERR_OUT_OF_BOUNDS;
-
-    *(uint32_t*)(&dat->data[ptr]) = num;
+    
+    WRITE_U32(&dat->data[ptr], num);
     return DAT_SUCCESS;
 }
 
@@ -390,7 +390,7 @@ DAT_RET dat_obj_write_u16(DatFile *dat, DatRef ptr, uint16_t num) {
     if (ptr & 1) return DAT_ERR_INVALID_ALIGNMENT;
     if (ptr + 2 > dat->data_size) return DAT_ERR_OUT_OF_BOUNDS;
 
-    *(uint16_t*)(&dat->data[ptr]) = num;
+    WRITE_U16(&dat->data[ptr], num);
     return DAT_SUCCESS;
 }
 

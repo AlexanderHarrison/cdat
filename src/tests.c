@@ -1,13 +1,13 @@
 #include "dat.h"
 #include "dat.c"
 
-#define TEST_INNER(A, C) do {\
-    if ((A) C) {\
-        fprintf(stderr, "TEST \"%s\" FAILED\n", test_name);\
-        fprintf(stderr, "line %i\n", __LINE__);\
-        fprintf(stderr, "expected '" #A "'\n");\
-    }\
-} while (0)
+void print_err(const char *test_name, int line, const char *cond) {
+    fprintf(stderr, "TEST \"%s\" FAILED\n", test_name);
+    fprintf(stderr, "line %i\n", line);
+    fprintf(stderr, "expected '%s'\n", cond);
+}
+
+#define TEST_INNER(A, C) if ((A) C) print_err(test_name, __LINE__, #A)
 #define DAT_TEST(A) TEST_INNER(A, != DAT_SUCCESS)
 #define EXPECT(A) TEST_INNER(A, == false)
 
@@ -82,6 +82,26 @@ int main(void) {
         info = dat.root_info[1];
         EXPECT(info.data_offset == root3_ref);
         EXPECT(strcmp(dat.symbols + info.symbol_offset, root3) == 0);
+    }
+    
+    {
+        test_name = "read/writes";
+        DatRef ref1;
+        DAT_TEST(dat_obj_alloc(&dat, 64, &ref1));
+        
+        DAT_TEST(dat_obj_write_u32(&dat, ref1 + 0x0, 0x12345678));
+        DAT_TEST(dat_obj_write_u16(&dat, ref1 + 0x4, 0x1234));
+        DAT_TEST(dat_obj_write_u8(&dat, ref1  + 0x6, 0x12));
+        
+        EXPECT(dat.data[ref1+0x0] == 0x12);
+        EXPECT(dat.data[ref1+0x1] == 0x34);
+        EXPECT(dat.data[ref1+0x2] == 0x56);
+        EXPECT(dat.data[ref1+0x3] == 0x78);
+        
+        EXPECT(dat.data[ref1+0x4] == 0x12);
+        EXPECT(dat.data[ref1+0x5] == 0x34);
+        
+        EXPECT(dat.data[ref1+0x6] == 0x12);
     }
     
     {
@@ -221,4 +241,6 @@ int main(void) {
     }
     
     DAT_TEST(dat_file_destroy(&dat));
+    
+    return 0;
 }
