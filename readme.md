@@ -1,7 +1,7 @@
 # What's in this repo?
 
 - **cdat** (src/dat.c src/dat.h): a simple, portable library for reading, modifying, and saving dat files.
-- **hmex** (src/hmex.c): a fast, portable reimplementation of MexTK. 
+- **hmex** (src/hmex.c): a fast, portable reimplementation of MexTK. Currently mostly working, just needs mex relocation to be implemented.
 
 ## [HSDRaw](https://github.com/Ploaj/HSDLib/) vs cdat
 HSDRaw and cdat serve different purposes.
