@@ -6,7 +6,6 @@
 #include <stdbool.h>
 #include <unistd.h>
 #include <errno.h>
-#include <alloca.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>

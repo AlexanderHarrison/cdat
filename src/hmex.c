@@ -1,6 +1,3 @@
-#include <libgen.h>
-#include <stdarg.h>
-
 #include "utils.h"
 
 #include "dat.h"
