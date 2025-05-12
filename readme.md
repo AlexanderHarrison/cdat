@@ -1,6 +1,7 @@
 # What's in this repo?
 
 - **cdat** (src/dat.c src/dat.h): a simple, portable library for reading, modifying, and saving dat files.
+- **dat_mod** (src/mod.c): a small command line utility for modifying dat files.
 - **hmex** (src/hmex.c): a fast and portable reimplementation of MexTK.
 Currently mostly working, but needs more testing.
 Function patching (a useful but undocumented feature of m-ex) is not yet implemented.
@@ -16,7 +17,42 @@ Notably, dat files do not contain code in SSBM - however, the m-ex dat format do
 
 
 
+## DatMod
+A very small wrapper around cdat for simple modification of dat files.
+```
+USAGE:
+    dat_mod debug <dat file>
+        Print information about a dat file.
+    dat_mod extract <dat file> <root name>
+        Extract a root from a dat file into its own file.
+    dat_mod insert <dat file> <input dat file>
+        Copy roots from one dat file into another.
+```
+
+
+
 ## Hmex
+A partial reimplementation MexTK.
+
+```
+USAGE:
+    hmex [flags]
+
+REQUIRED FLAGS:
+    -i <file.c file2.o ...>     : Input filepaths.
+    -l <melee.link>             : File containing melee symbol addresses.
+    -t <symbol-table.txt>       : Symbol table.
+    -o <output.dat>             : Output dat file.
+
+OPTIONAL FLAGS:
+    -h                          : Show hmex usage.
+    -dat <inputs.dat>           : Input dat file.
+                                    Is an empty dat file by default.
+    -f <gcc flags>              : Flags to pass to gcc. Optimization, warnings, etc.
+                                    Is '" DEFAULT_GCC_FLAGS "' by default.
+    -s <symbol name>            : Symbol name.
+                                    Is the symbol table filename (excluding extension) by default.
+```
 
 Hmex and MexTK at their core convert elf files to a custom executable format used by the m-ex framework.
 This custom format is contained in dat files, the general object format used by SSBM.
