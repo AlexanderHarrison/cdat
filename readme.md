@@ -27,7 +27,7 @@ To explain the m-ex format, you need to understand the dat format.
 
 
 ### Dat files
-Dat files contain four sections.
+Dat files contain six sections.
 
 **Please note that everything in a dat file is big endian!**
 
@@ -109,8 +109,64 @@ Lasts from the end of the external ref table until the end of the file.
 
 ### m-ex Executable Format
 
+A mex executable starts with a custom root node.
+This root node is defined by the executable loader.
+For example, TM-CE looks for a root node called 'evFunction'.
 
+This root node points to this object: 
+```c
+struct MEXExe {
+    u8 *code;                       // 0x0
+    MEXReloc *reloc_table;          // 0x4    
+    u32 reloc_count;                // 0x8
+    MEXFunction *fn_table;          // 0xC
+    u32 fn_table_num;               // 0x10
+    u32 code_size;                  // 0x14
+    
+    // These are unimplemented in hmex and won't be discussed.
+    u32 debug_symbol_count;         // 0x18
+    MEXDebugSymbol *debug_symbols;  // 0x1c
+};
 
+struct MEXFunction {
+    u32 index;       // 0x0
+    u32 code_offset; // 0x4
+};
+
+struct MEXReloc {
+    u32 cmd_and_code_offset; // 0x0
+    u32 reloc;               // 0x4
+};
+```
+
+When compiling with hmex or MexTK, you pass a symbol file.
+For example, evFunction.txt:
+```
+Event_Init
+Event_Update
+Event_Think
+Event_Menu
+```
+
+These symbols correspond to `MEXFunctions`.
+For example, the `MEXFunction` with index 2 is the function `Event_Think`.
+The `code_offset` field offsets into the `code` field given in `MEXExe`.
+
+The `MEXReloc` table contains relocation information for instructions.
+Instructions cannot be relocated like pointers, they are more complex,
+so a mex executable has its own table.
+
+The `cmd_and_code_offset` is two fields mushed into one, `cmd` and `code_offset`.
+The highest byte is cmd, and the lower 3 bytes is the code_offset.
+The `cmd` field is the [relocation type](http://www.skyfree.org/linux/references/ELF_Format.pdf#page=28)
+given by the elf file.
+The `code_offset` field gives the offset of the instruction to relocate.
+
+The `reloc` field can be two different types of values.
+If the instruction is linked to an internal SSBM function or address,
+then this will contain a raw RAM address (> 0x80000000).
+If the instruction is linked to a function or address in the dat file,
+then it is the code offset to the target address.
 
 ## [HSDRaw](https://github.com/Ploaj/HSDLib/) vs cdat
 HSDRaw and cdat serve different purposes.
