@@ -15,6 +15,7 @@ export GCC_COLORS="warning=01;33"
 
 /usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/mod.c ${LINK_FLAGS} -o dat_mod
 /usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/hmex.c ${LINK_FLAGS} -o hmex
+/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/install.c ${LINK_FLAGS} -o hmex_install
 
 if [ "$1" = 'release' ]; then
     strip dat_mod hmex

@@ -8,7 +8,7 @@
 #include "dat.c"
 
 #define MAX_CMD_LEN 8192
-#define DEFAULT_GCC_FLAGS "-O1 -Wall -Wextra"
+#define DEFAULT_GCC_FLAGS "-O2 -Wall -Wextra"
 
 static const char *HELP = "\
 USAGE:\n\
@@ -16,7 +16,7 @@ USAGE:\n\
 \n\
 REQUIRED FLAGS:\n\
     -i <file.c file2.o ...>     : Input filepaths.\n\
-    -T <melee.ld>               : Linker script symbol file.\n\
+    -l <melee.link>             : File containing melee symbol addresses.\n\
     -t <symbol-table.txt>       : Symbol table.\n\
     -o <output.dat>             : Output dat file.\n\
 \n\
@@ -31,7 +31,7 @@ OPTIONAL FLAGS:\n\
 ";
 
 enum ArgFlags {
-    Arg_Help = (1ul << 0),
+    Arg_Help        = (1ul << 0),
 };
 
 typedef struct Args {
@@ -41,14 +41,14 @@ typedef struct Args {
     // required arguments
     const char **input_filepaths;   // -i
     uint32_t input_filepaths_count;
-    const char *linker_script_path; // -T
     const char *symbol_table_path;  // -t
     const char *output_dat_path;    // -o
     
     // optional arguments
-    const char *input_dat_path;     // -dat
-    const char *gcc_flags;          // -f
-    const char *symbol_name;        // -s
+    const char *input_dat_path;   // -dat
+    const char *link_table_path;  // -l
+    const char *gcc_flags;        // -f
+    const char *symbol_name;      // -s
     
     uint64_t flags;
 } Args;
@@ -58,7 +58,7 @@ static NoArgFlag no_arg_flags[] = {
     { "-h", Arg_Help },
 }; 
 static SingleArgFlag single_arg_flags[] = { 
-    { "-T", &args.linker_script_path },
+    { "-l", &args.link_table_path },
     { "-t", &args.symbol_table_path },
     { "-o", &args.output_dat_path },
     { "-dat", &args.input_dat_path },
@@ -116,14 +116,6 @@ and ensure the DEVKITPPC environment variable is set.\n");
         }
     }
     
-    if (args.linker_script_path == NULL) {
-        fprintf(stderr, ERROR "No linker script passed! Use '-T' to pass a linker script.\n");
-        print_usage = true;
-        err = true;
-    } else {
-        err |= check_path_access(args.linker_script_path, R_OK);
-    }
-    
     if (args.symbol_table_path == NULL) {
         fprintf(stderr, ERROR "No symbol table passed! Use '-t' to pass a symbol table path.\n");
         print_usage = true;
@@ -140,42 +132,18 @@ and ensure the DEVKITPPC environment variable is set.\n");
     
     // optional arguments
     
-    if (args.input_dat_path == NULL) {
-        // Do nothing. This is allowed to be NULL.
-    } else {
+    if (args.input_dat_path)
         err |= check_path_access(args.input_dat_path, R_OK);
-    }
     
+    if (args.link_table_path)
+        err |= check_path_access(args.link_table_path, R_OK);
+        
     if (args.gcc_flags == NULL)
         args.gcc_flags = DEFAULT_GCC_FLAGS;
+    printf("args %s\n", args.gcc_flags);
         
-    if (args.symbol_name == NULL && args.symbol_table_path != NULL) {
-        // find filename of symbol table path and use that as the symbol name
-        
-        uint64_t len = strlen(args.symbol_table_path) + 1; 
-        char *symbol_name = malloc(len);
-        memcpy(symbol_name, args.symbol_table_path, len);
-        
-        // find last period (not including period as first character)
-        uint64_t period = 0;
-        for (uint64_t i = 1; i < len; ++i) {
-            if (symbol_name[i] == '.')
-                period = i;
-        }
-        // find last path separator
-        uint64_t start = 0;
-        for (uint64_t i = 0; i < len; ++i) {
-            char c = symbol_name[i];  
-            if (c == '/' || c == '\\')
-                start = i+1;
-        }
-        // strip directory and extension
-        if (period > 0)
-            symbol_name[period] = 0;
-        symbol_name = &symbol_name[start];
-        
-        args.symbol_name = symbol_name;
-    }
+    if (args.symbol_name == NULL && args.symbol_table_path != NULL)
+        args.symbol_name = inner_name(args.symbol_table_path);
     
     if (print_usage)
         fprintf(stderr, "\n%s", HELP);
@@ -208,8 +176,15 @@ char *copy_args(char *cmd, char *curcmd, const char *arg) {
 }
     
 typedef struct MEXReloc {
-    uint32_t cmd_and_code_offset; // cmd in high byte, code_offset in low 3 bytes.
-    uint32_t reloc_offset;
+    // cmd in high byte, code_offset in low 3 bytes.
+    uint32_t cmd_and_code_offset;     
+    
+    // - If this is a melee symbol, this is the address of the symbol.
+    // - If this is an internal symbol, this is the offset of the symbol from the start of the data.
+    // For now, it means it is the elf offset.
+    //
+    // I guess if location > 0x80000000 then it's handled differently within mex?
+    uint32_t location;
 } MEXReloc;
 
 typedef struct MEXSymbol {
@@ -217,11 +192,11 @@ typedef struct MEXSymbol {
     uint32_t elf_offset;
 } MEXSymbol;
 
-typedef struct CodeSection {
-    uint32_t code_size;
-    uint32_t elf_offset;
-    DatRef dat_offset; 
-} CodeSection;
+// entry in melee.link
+typedef struct LinkEntry {
+    uint8_t *symbol;
+    uint32_t address;
+} LinkEntry;
 
 bool match_section_name(const uint8_t *symbol, const uint8_t *section_name) {
     static const char header[] = ".text.";
@@ -281,15 +256,105 @@ int main(int argc, const char *argv[]) {
         symbol_table = read_lines(st, st_size);
     }
     
+    // parse melee link table file
+    LinkEntry *link_table = NULL;
+    uint32_t link_table_entry_count = 0;
+    uint8_t *link_table_symbols = NULL;
+    if (args.link_table_path) {
+        uint8_t *lt;
+        uint64_t lt_size;
+        if (read_file(args.link_table_path, &lt, &lt_size))
+            exit(1);
+            
+        uint32_t link_table_entry_count_max = 0;
+        for (uint64_t i = 0; i < lt_size; ++i) {
+            if (lt[i] == '\n')
+                link_table_entry_count_max++;
+        }
+        link_table_entry_count_max++; // add room for last line, which may not be null terminated
+        
+        link_table = malloc(sizeof(LinkEntry) * link_table_entry_count_max);
+        link_table_symbols = malloc(lt_size);
+        uint8_t *link_table_symbols_head = link_table_symbols;
+        
+        // parse lines
+        uint64_t i = 0;
+        uint64_t line = 1;
+        link_table_entry_count = 0;
+        bool err = false;
+        for (; i < lt_size; ++i) {
+            // parse address
+            uint32_t addr = 0;
+            for (; i < lt_size; ++i) {
+                uint8_t c = lt[i];
+                if ('0' <= c && c <= '9') {
+                    addr <<= 4;
+                    addr += (uint32_t)(c - '0');
+                } else if ('a' <= c && c <= 'f') {
+                    addr <<= 4;
+                    addr += (uint32_t)(c - 'a' + 10);
+                } else if ('A' <= c && c <= 'F') {
+                    addr <<= 4;
+                    addr += (uint32_t)(c - 'A' + 10);
+                } else if (c == ':') {
+                    ++i;
+                    break;
+                } else {
+                    err = true;
+                    break;
+                } 
+            }
+            
+            // parse symbol
+            uint8_t *symbol = link_table_symbols_head;
+            uint32_t symbol_len = 0;
+            for (; i < lt_size; ++i) {
+                uint8_t c = lt[i];
+                
+                // \r\n
+                if (c == '\r') {
+                    ++i;
+                    break;
+                }
+                
+                // \n
+                if (c == '\n')
+                    break;
+                    
+                symbol_len++;
+                *(link_table_symbols_head++) = c;
+            }
+            *(link_table_symbols_head++) = 0;
+            
+            if (symbol_len == 0) err = true;
+            if (addr < 0x80000000) err = true;
+            
+            if (err) {
+                fprintf(
+                    stderr,
+                    WARNING "%s:%lu Malformed entry in melee link table\n",
+                    args.link_table_path,
+                    line
+                );
+            } else {
+                link_table[link_table_entry_count++] = (LinkEntry) { symbol, addr };
+            }
+            
+            line++;
+        }
+        
+        free(lt);
+    }
+    
     // compile c files
+    char *cmd = malloc(MAX_CMD_LEN);
     {
-        char *cmd = malloc(MAX_CMD_LEN);
         char *curcmd = cmd; 
        
         curcmd = copy_arg (cmd, curcmd, gcc_path);
-        curcmd = copy_args(cmd, curcmd, "-DGEKKO -mogc -mcpu=750 -meabi -mhard-float -c -o hmex.o");
-        curcmd = copy_args(cmd, curcmd, "-T");
-        curcmd = copy_arg (cmd, curcmd, args.linker_script_path);
+        curcmd = copy_args(cmd, curcmd, "-fno-asynchronous-unwind-tables -c -o hmex.o");
+        //curcmd = copy_args(cmd, curcmd, "-T");
+        //curcmd = copy_arg (cmd, curcmd, args.linker_script_path);
         curcmd = copy_args(cmd, curcmd, args.gcc_flags);
         
         for (uint32_t i = 0; i < args.input_filepaths_count; ++i) {
@@ -335,31 +400,165 @@ int main(int argc, const char *argv[]) {
         expect(shstrndx != 0);
         
         Elf32_Shdr *str_section = (Elf32_Shdr*)&hmex_o[shoff + shstrndx * shentsize]; 
-        uint8_t *mex_o_symbols = &hmex_o[bswap_32(str_section->sh_offset)]; 
+        uint8_t *hmex_o_symbols = &hmex_o[bswap_32(str_section->sh_offset)];
         
+        // find table sections through section header table
+        uint8_t *symtab = NULL; 
+        uint8_t *strtab = NULL; 
+        uint32_t symtab_count = 0; 
+        uint32_t symtab_entsize = 0;
         for (uint32_t shdr_i = 0; shdr_i < shnum; ++shdr_i) {
             Elf32_Shdr *shdr = (Elf32_Shdr*)&hmex_o[shoff + shdr_i * shentsize];
-            uint64_t type = bswap_32(shdr->sh_type); 
-            uint32_t elf_offset = bswap_32(shdr->sh_offset); 
             
-            // MexTK kinda uses kinda ignores this field, so we ensure it doesn't exist. 
-            expect(type != SHT_REL);
+            uint8_t *section_name = &hmex_o_symbols[bswap_32(shdr->sh_name)];
+            if (strcmp((char*)section_name, ".symtab") == 0) {
+                expect(symtab == NULL); // ELFs should only contain one symbol table section
+                symtab = &hmex_o[bswap_32(shdr->sh_offset)];
+                symtab_entsize = bswap_32(shdr->sh_entsize); 
+                symtab_count = bswap_32(shdr->sh_size) / symtab_entsize;
+            }
+             
+            if (strcmp((char*)section_name, ".strtab") == 0) {
+                expect(strtab == NULL); // ELFs should only contain one string table section
+                strtab = &hmex_o[bswap_32(shdr->sh_offset)];
+            }
+        }
+        
+        expect(symtab);
+        expect(strtab);
+        
+        // match internal symbols with mex symbols in passed symbol table file
+        for (uint32_t symtab_i = 1; symtab_i < symtab_count; ++symtab_i) {
+            Elf32_Sym *sym = (Elf32_Sym*)(symtab + symtab_i * symtab_entsize);
+            uint8_t *sym_name = &strtab[bswap_32(sym->st_name)];
+            uint32_t shndx = bswap_16(sym->st_shndx);
+            uint8_t info = sym->st_info;
+            if (ELF32_ST_BIND(info) != STB_GLOBAL) continue;
             
-            if (type == SHT_RELA) {
-                // TODO
-            } else if (type == SHT_PROGBITS) {
-                // find sections matching symbols
+            for (uint32_t symbol_i = 0; ; symbol_i++) {
+                uint8_t *export_symbol = symbol_table[symbol_i];
+                if (export_symbol == NULL) break;
                 
-                uint8_t *section_name = &mex_o_symbols[bswap_32(shdr->sh_name)]; 
-                
-                for (uint32_t symbol_i = 0; ; symbol_i++) {
-                    uint8_t *export_symbol = symbol_table[symbol_i];
-                    if (export_symbol == NULL) break;
+                if (strcmp((char*)sym_name, (char*)export_symbol) == 0) {
+                    if (shndx == SHN_COMMON)
+                        printf("IDK WHAT TO DO WITH THIS %s\n", sym_name);
+                    if (shndx == SHN_ABS)
+                        printf("IDK WHAT TO DO WITH THIS %s\n", sym_name);
+                        
+                    Elf32_Shdr *shdr = (Elf32_Shdr*)&hmex_o[shoff + shndx * shentsize];
+                    uint32_t elf_offset = bswap_32(shdr->sh_offset) + bswap_32(sym->st_value);
                     
-                    if (match_section_name(export_symbol, section_name))
-                        fn_table[fn_count++] = (MEXSymbol) { symbol_i, elf_offset };
+                    fn_table[fn_count++] = (MEXSymbol) { symbol_i, elf_offset };
+                    break;
                 }
             }
+        }
+        
+        // print matched symbols
+        for (uint32_t symbol_i = 0; ; symbol_i++) {
+            uint8_t *symbol = symbol_table[symbol_i];
+            if (symbol == NULL) break;
+            
+            bool matched = false;
+            for (uint32_t fn_i = 0; fn_i < fn_count; ++fn_i) {
+                if (fn_table[fn_i].symbol_idx == symbol_i)
+                    matched = true;
+            }
+            
+            if (matched) {
+                printf(GREEN_CODE "O | %s" RESET_CODE "\n", symbol);
+            } else {
+                printf("X | %s\n", symbol);
+            }
+        }
+        
+        // get relocation for each section
+        bool link_err = false;
+        for (uint32_t shdr_i = 0; shdr_i < shnum; ++shdr_i) {
+            Elf32_Shdr *shdr = (Elf32_Shdr*)&hmex_o[shoff + shdr_i * shentsize];
+            
+            uint64_t type = bswap_32(shdr->sh_type);
+            if (type != SHT_RELA && type != SHT_REL) continue;
+            
+            // find the location of the section where the relocation takes place
+            uint32_t src_shdr_i = bswap_32(shdr->sh_info);
+            Elf32_Shdr *src_shdr = (Elf32_Shdr*)&hmex_o[shoff + src_shdr_i * shentsize];
+            uint32_t rel_src = bswap_32(src_shdr->sh_offset);
+                
+            uint32_t rel_entsize = bswap_32(shdr->sh_entsize);
+            uint32_t rel_count = bswap_32(shdr->sh_size) / rel_entsize;
+            uint8_t *rel_table = &hmex_o[bswap_32(shdr->sh_offset)];
+            
+            for (uint32_t rel_i = 0; rel_i < rel_count; ++rel_i) {
+                Elf32_Rela* rel = (Elf32_Rela*)(rel_table + rel_i * rel_entsize);
+                uint32_t rel_symtab_i = ELF32_R_SYM(bswap_32(rel->r_info));
+                uint32_t rel_type = ELF32_R_TYPE(bswap_32(rel->r_info));
+                uint32_t rel_offset = bswap_32(rel->r_offset);
+                
+                Elf32_Sym *sym = (Elf32_Sym*)(symtab + rel_symtab_i * symtab_entsize);
+                uint32_t shndx = bswap_16(sym->st_shndx);
+                uint8_t *sym_name = &strtab[bswap_32(sym->st_name)];
+                
+                // where the relocation points to. Either ram address or elf offset.
+                uint32_t location = 0;
+                    
+                if (shndx == SHN_UNDEF) {
+                    // Not defined in elf file, so this is an internal melee symbol.
+                    // Location is ram address.
+                    
+                    // Look in link table file for symbol address in ram.
+                    if (link_table != NULL) {
+                        // TODO use hashmap instead of linear lookup
+                        for (uint32_t link_i = 0; link_i < link_table_entry_count; ++link_i) {
+                            LinkEntry *link_entry = &link_table[link_i];
+                            if (strcmp(sym_name, link_entry->symbol) == 0) {
+                                location = link_entry->address;
+                                break;
+                            }
+                        } 
+                    }
+                    
+                    if (location == 0) {
+                        fprintf(stderr, ERROR "Undefined symbol: %s\n", sym_name);
+                        link_err = true;
+                    }
+                } else {
+                    // Is defined in elf file. location is offset from start of elf.
+                    if (shndx == SHN_COMMON)
+                        printf("IDK WHAT TO DO WITH THIS %s\n", sym_name);
+                    if (shndx == SHN_ABS)
+                        printf("IDK WHAT TO DO WITH THIS %s\n", sym_name);
+                        
+                    Elf32_Shdr *target_shdr = (Elf32_Shdr*)&hmex_o[shoff + shndx * shentsize];
+                    location = bswap_32(target_shdr->sh_offset) + bswap_32(sym->st_value);
+                    
+                    if (type == SHT_RELA) {
+                        int32_t offset = (int32_t)bswap_32((uint32_t)rel->r_addend);
+                        location = (uint32_t)((int32_t)location + offset); // IDK IF THIS IS RIGHT!!!
+                    }
+                }
+                
+                reloc[reloc_count++] = (MEXReloc) {
+                    .cmd_and_code_offset = (rel_type << 24) | (rel_src + rel_offset),
+                    .location = location,
+                };
+            }
+        }
+        
+        if (link_err) {
+            if (args.link_table_path) {
+                fprintf(
+                    stderr,
+                    "Implement or add the above symbols to to your link file in %s.\n",
+                    args.link_table_path
+                );
+            } else {
+                fprintf(
+                    stderr,
+                    "Pass a link table file (usually 'melee.link') with the -l flag.\n"
+                );
+            }
+            exit(1);
         }
     }
       
@@ -372,7 +571,17 @@ int main(int argc, const char *argv[]) {
         dat_expect(dat_obj_alloc(&dat, code_size, &code_offset));
         memcpy(&dat.data[code_offset], hmex_o, code_size);
         
-        // TODO relocation
+        // alloc and write relocation table.
+        DatRef reloc_table_offset;
+        uint32_t reloc_table_count = (uint32_t)reloc_count;
+        uint32_t reloc_table_size = (uint32_t)(sizeof(MEXReloc) * reloc_count);
+        dat_expect(dat_obj_alloc(&dat, reloc_table_size, &reloc_table_offset));
+        for (uint64_t i = 0; i < reloc_count; ++i) {
+            MEXReloc *reloc_entry = &reloc[i];
+            DatRef entry_offset = reloc_table_offset + (uint32_t)(sizeof(MEXReloc)*i); 
+            dat_expect(dat_obj_write_u32(&dat, entry_offset + 0, reloc_entry->cmd_and_code_offset));
+            dat_expect(dat_obj_write_u32(&dat, entry_offset + 4, reloc_entry->location));
+        }
         
         // alloc and write fn pointer table
         DatRef fn_table_offset;
@@ -386,7 +595,7 @@ int main(int argc, const char *argv[]) {
             
             // Right now, the elf offset is the same as the code offset, because
             // we simply copy the entire elf in to the dat file.
-            // This may change in the future.
+            // This will change in the future.
             dat_expect(dat_obj_write_u32(&dat, entry_offset + 4, sym->elf_offset));
         }
         
@@ -397,8 +606,8 @@ int main(int argc, const char *argv[]) {
         dat_expect(dat_root_add(&dat, dat.root_count, fn_obj, args.symbol_name));
         
         dat_expect(dat_obj_set_ref  (&dat, fn_obj + 0x00, code_offset));
-        //dat_expect(dat_obj_set_ref  (&dat, fn_obj + 0x04, reloc_table_offset));
-        //dat_expect(dat_obj_write_u32(&dat, fn_obj + 0x08, reloc_table_count));
+        dat_expect(dat_obj_set_ref  (&dat, fn_obj + 0x04, reloc_table_offset));
+        dat_expect(dat_obj_write_u32(&dat, fn_obj + 0x08, reloc_table_count));
         dat_expect(dat_obj_set_ref  (&dat, fn_obj + 0x0C, fn_table_offset));
         dat_expect(dat_obj_write_u32(&dat, fn_obj + 0x10, fn_table_count));
         dat_expect(dat_obj_write_u32(&dat, fn_obj + 0x14, code_size)); // (unused???)

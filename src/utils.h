@@ -10,8 +10,15 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
-#define ERROR "\033[31mERROR:\033[0m "
+#define RED_CODE "\033[31m"
+#define GREEN_CODE "\033[32m"
+#define YELLOW_CODE "\033[33m"
+#define RESET_CODE "\033[0m"
+
+#define ERROR RED_CODE "ERROR: " RESET_CODE
+#define WARNING YELLOW_CODE "WARNING: " RESET_CODE
 
 #if defined(WIN32) || defined(_WIN32) 
 #define PATH_SEPARATOR "\\"
@@ -20,7 +27,7 @@
 #endif
 
 #define expect(A) do {\
-    if ((A) == false) {\
+    if (!(A)) {\
         fprintf(stderr, "expect failed - " __FILE__ ":%u: '" #A "'\n", __LINE__);\
         exit(1);\
     }\
@@ -40,6 +47,10 @@ bool check_path_access(const char *path, int permissions) {
         return true;
     }
     return false;
+}
+
+bool path_exists(const char *path) {
+    return access(path, F_OK) == 0;
 }
 
 // Returns true and prints an error if the 
@@ -197,7 +208,7 @@ void read_args(
         for (uint64_t flag_i = 0; flag_i < single_arg_flag_count; ++flag_i) {
             SingleArgFlag *flag = &single_arg_flags[flag_i];
             if (strcmp(arg, flag->name) == 0) {
-                if (arg_i >= argc || argv[arg_i][0] == '-') {
+                if (arg_i >= argc) {
                     fprintf(stderr, ERROR "No argument passed for '%s' flag.\n", flag->name);
                 } else {
                     *flag->target = argv[arg_i++]; 
@@ -235,7 +246,7 @@ void read_args(
     }
 }
 
-// stpcpy is portable in c99, so I wrote my own.
+// these aren't portable in c99, so I wrote my own.
 char *my_stpcpy(char *buf, const char *str) {
     while (1) {
         char c = *str;
@@ -245,6 +256,39 @@ char *my_stpcpy(char *buf, const char *str) {
         buf++;
         str++;
     }
+}
+char *my_strdup(const char *src) {
+    char *str = malloc(strlen(src)+1);
+    strcpy(str, src);
+    return str;
+}
+
+// returns the filename without extension of the path. 
+char *inner_name(const char *path) {
+    // find last path separator
+    uint64_t start = 0;
+    uint64_t len = strlen(path);
+    for (uint64_t i = 0; i < len; ++i) {
+        char c = path[i];  
+        if (c == '/' || c == '\\')
+            start = i+1;
+    }
+    
+    // Find last period.
+    // Don't count period if first character of filename.
+    uint64_t period = 0;
+    for (uint64_t i = start+1; i < len; ++i) {
+        if (path[i] == '.')
+            period = i;
+    }
+    
+    char *inner = my_strdup(&path[start]);
+    
+    // strip extension
+    if (period != 0)
+        inner[period - start] = 0;
+        
+    return inner;
 }
 
 char *path_join(const char *first, ...) {

@@ -1,3 +1,4 @@
+#include "utils.h"
 #include "dat.h"
 #include "dat.c"
 
@@ -6,17 +7,49 @@
 #define USAGE "\
 USAGE:\n\
     dat_mod debug <dat file>\n\
-    dat_mod extract <dat file> <root name> [out root name]\n\
+        Print information about a dat file.\n\
+    dat_mod extract <dat file> <root name>\n\
+        Extract a root from a dat file into its own file.\n\
+    dat_mod insert <dat file> <input dat file>\n\
+        Copy roots from one dat file into another.\n\
 "
 
-typedef struct File { char *ptr; size_t size; } File;
-File read_file(const char* filepath);
-bool write_file(const char* filepath, uint8_t *buf, size_t size);
+DatFile read_dat(const char *path) {
+    DatFile dat;
+    uint8_t *file;
+    uint64_t file_size;
+    if (read_file(path, &file, &file_size)) {
+        exit(1);
+    } else {
+        dat_file_import(file, (uint32_t)file_size, &dat);
+    }
+    
+    return dat;
+}
 
-char *strdup(const char *src) {
-    char *str = malloc(strlen(src)+1);
-    strcpy(str, src);
-    return str;
+void write_dat(DatFile *dat, const char *path) {
+    uint32_t max_size = dat_file_export_max_size(dat);
+    uint8_t *buf = malloc(max_size);
+    uint32_t export_size;
+    dat_file_export(dat, buf, &export_size);
+    if (write_file(path, buf, export_size))
+        exit(1);
+}
+
+DatRootInfo *find_root(DatFile *dat, const char *root_name) {
+    for (int64_t root_i = 0; root_i < dat->root_count; ++root_i) {
+        DatRootInfo *r = &dat->root_info[root_i];
+        if (strcmp(root_name, dat->symbols + r->symbol_offset) == 0)
+            return r;
+    }
+    
+    fprintf(stderr, ERROR "root '%s' not found.\n", root_name);
+    exit(1);
+}
+
+void usage_exit(void) {
+    fprintf(stderr, USAGE);
+    exit(1);
 }
 
 int main(int argc, const char *argv[]) {
@@ -25,154 +58,54 @@ int main(int argc, const char *argv[]) {
         return 0;
     }
     
-    bool parse_err = false;
-    bool debug = false;
-    bool copy_root = false;
-    bool save = false;
-    char *dat_path_in = NULL;
-    char *dat_path_out = NULL;
-    char *root_name_in = NULL;
-    char *root_name_out = NULL;
-    
     // Parse arguments ------------------------------
 
     const char *arg1 = argv[1];
     if (strcmp(arg1, "debug") == 0) {
-        debug = true;
-        if (argc < 3) {
-            parse_err = true;
-            fprintf(stderr, USAGE);
-        } else {
-            dat_path_in = strdup(argv[2]);
-        }
+        if (argc < 3)
+            usage_exit();
+        
+        DatFile dat = read_dat(argv[2]);
+        dat_file_debug_print(&dat);
     } else if (strcmp(arg1, "extract") == 0) {
-        copy_root = true;
-        save = true;
-        if (argc < 4) {
-            parse_err = true;
-            fprintf(stderr, USAGE);
-        } else {
-            dat_path_in = strdup(argv[2]); 
-            root_name_in = strdup(argv[3]); 
-        }
+        if (argc < 4)
+            usage_exit(); 
         
-        root_name_out = strdup(argc < 5 ? root_name_in : argv[4]);
-        dat_path_out = malloc(strlen(root_name_in) + 5);
-        char *end = strcpy(dat_path_out, root_name_out);
-        strcpy(end, ".dat"); 
-    }
-    
-    if (parse_err)
-        return 1;
-
-    // Run IO --------------------------------------
-
-    bool io_err = false;
-    DatFile *dat_in = NULL;
-    DatFile *dat_out = NULL;
-    DatRootInfo *root_in = NULL;
+        // read args
+        DatFile dat_in = read_dat(argv[2]);
+        const char *root_name = argv[3];
+        DatRootInfo *root_in = find_root(&dat_in, root_name);
         
-    if (dat_path_in) {
-        dat_in = malloc(sizeof(DatFile));
-        File file = read_file(dat_path_in);
-        if (file.ptr == NULL) {
-            io_err = true;
-            fprintf(stderr, "Error: dat file '%s' not found.\n", dat_path_in);
-        } else { 
-            dat_file_import((uint8_t*)file.ptr, (uint32_t)file.size, dat_in);
-        }
-    }
-    
-    if (dat_path_out) {
-        dat_out = malloc(sizeof(DatFile));
-        File file = read_file(dat_path_out);
-        if (file.ptr == NULL)
-            dat_file_new(dat_out);
-        else 
-            dat_file_import((uint8_t*)file.ptr, (uint32_t)file.size, dat_out);
-    }
-    
-    if (root_name_in) {
-        for (int64_t root_i = 0; root_i < dat_in->root_count; ++root_i) {
-            DatRootInfo *root = &dat_in->root_info[root_i];
-            char *root_name = dat_in->symbols + root->symbol_offset;
-            if (strcmp(root_name, root_name_in) == 0) {
-                root_in = root;
-                break;
-            }
-        }
+        // add extension 
+        char *dat_path_out = malloc(strlen(root_name) + 4 + 1);
+        char *ext = my_stpcpy(dat_path_out, root_name);
+        my_stpcpy(ext, ".dat");
         
-        if (root_in == NULL) {
-            printf("Error: root '%s' not found in '%s'.\n", root_name_in, dat_path_in);
-            io_err = true;
-        }
-    }
-    
-    if (io_err)
-        return 1;
-    
-    // Run Commands --------------------------------------
-    
-    if (debug)
-        dat_file_debug_print(dat_in);
-    
-    if (copy_root) {
+        // copy root
+        DatFile out;
+        dat_file_new(&out);
         DatRef copied_root;
-        dat_obj_copy(dat_out, dat_in, root_in->data_offset, &copied_root);
-        dat_root_add(dat_out, dat_out->root_count, copied_root, root_name_out);
-    }
-    
-    if (save) {
-        uint32_t max_size = dat_file_export_max_size(dat_out);
-        uint8_t *buf = malloc(max_size);
-        uint32_t export_size;
-        dat_file_export(dat_out, buf, &export_size);
-        write_file(dat_path_out, buf, export_size);
+        dat_obj_copy(&out, &dat_in, root_in->data_offset, &copied_root);
+        dat_root_add(&out, 0, copied_root, root_name);
+        
+        write_dat(&out, dat_path_out);
+    } else if (strcmp(arg1, "insert") == 0) {
+        // TODO fix (try copy map_head into map_head, roots are same offset)
+        DatFile dat_dst = read_dat(argv[2]);
+        DatFile dat_src = read_dat(argv[3]);
+        
+        uint32_t root_count = dat_src.root_count; 
+        for (uint32_t i = 0; i < root_count; ++i) {
+            DatRootInfo *info = &dat_src.root_info[i];
+            
+            DatRef copied_root;
+            dat_obj_copy(&dat_dst, &dat_src, info->data_offset, &copied_root);
+            char *root_name = dat_src.symbols + info->symbol_offset;
+            dat_root_add(&dat_dst, dat_dst.root_count, copied_root, root_name);
+        }
+        
+        write_dat(&dat_dst, argv[2]);
     }
     
     return 0;
-}
-
-File read_file(const char* filepath) {
-    FILE *f = NULL;
-    char *ptr = NULL;
-
-    f = fopen(filepath, "rb");
-    if (f == NULL) goto ERR;
-
-    if (fseek(f, 0, SEEK_END) < 0) goto ERR;
-    long size_or_err = ftell(f);
-    if (size_or_err < 0) goto ERR;
-    size_t size = (size_t)size_or_err;
-    if (fseek(f, 0, SEEK_SET) < 0) goto ERR;
-
-    ptr = malloc(size);
-    if (ptr == NULL) goto ERR;
-
-    if (size != 0 && fread(ptr, size, 1, f) != 1) goto ERR;
-
-    if (fclose(f) != 0) goto ERR_NO_FCLOSE;
-
-    return (File) { ptr, size };
-
-ERR:
-    if (f) fclose(f);
-ERR_NO_FCLOSE:
-    if (ptr) free(ptr);
-    return (File) { NULL, 0 };
-}
-
-bool write_file(const char* filepath, uint8_t *buf, size_t size) {
-    FILE *f = NULL;
-
-    f = fopen(filepath, "wb+");
-    if (f == NULL) goto ERR;
-
-    if (size != 0 && fwrite(buf, size, 1, f) != 1) goto ERR;
-    if (fclose(f) != 0) goto ERR;
-    return false;
-
-ERR:
-    if (f) fclose(f);
-    return true;
 }
