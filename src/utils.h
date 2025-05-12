@@ -280,7 +280,7 @@ void read_args(
         }
         
         if (!arg_handled)
-            fprintf(stderr, ERROR_STR "Unknown flag '%s'.\n", arg);
+            fprintf(stderr, WARNING_STR "Unknown flag '%s'.\n", arg);
         
         next_arg: NULL;
     }
