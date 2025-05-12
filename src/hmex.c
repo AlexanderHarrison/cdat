@@ -352,7 +352,7 @@ int main(int argc, const char *argv[]) {
         char *curcmd = cmd; 
        
         curcmd = copy_arg (cmd, curcmd, gcc_path);
-        curcmd = copy_args(cmd, curcmd, "-fno-asynchronous-unwind-tables -c -o hmex.o");
+        curcmd = copy_args(cmd, curcmd, "-DGEKKO -mogc -mcpu=750 -meabi -mhard-float -fno-asynchronous-unwind-tables -c -o hmex.o");
         //curcmd = copy_args(cmd, curcmd, "-T");
         //curcmd = copy_arg (cmd, curcmd, args.linker_script_path);
         curcmd = copy_args(cmd, curcmd, args.gcc_flags);
