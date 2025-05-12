@@ -511,7 +511,7 @@ int main(int argc, const char *argv[]) {
                         // TODO use hashmap instead of linear lookup
                         for (uint32_t link_i = 0; link_i < link_table_entry_count; ++link_i) {
                             LinkEntry *link_entry = &link_table[link_i];
-                            if (strcmp(sym_name, link_entry->symbol) == 0) {
+                            if (strcmp((char*)sym_name, (char*)link_entry->symbol) == 0) {
                                 location = link_entry->address;
                                 break;
                             }
