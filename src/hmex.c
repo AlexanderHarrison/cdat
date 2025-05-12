@@ -355,7 +355,7 @@ int main(int argc, const char *argv[]) {
 
         // parse lines
         uint64_t i = 0;
-        uint64_t line = 1;
+        uint32_t line = 1;
         link_table_entry_count = 0;
         bool err = false;
         for (; i < lt_size; ++i) {
@@ -408,7 +408,7 @@ int main(int argc, const char *argv[]) {
             if (err) {
                 fprintf(
                     stderr,
-                    WARNING_STR "%s:%llu Malformed entry in melee link table\n",
+                    WARNING_STR "%s:%u Malformed entry in melee link table\n",
                     args.link_table_path,
                     line
                 );
