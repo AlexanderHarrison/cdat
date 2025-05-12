@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-set WARN_FLAGS=/Wall /WX /W4
+set WARN_FLAGS=/Wall /wd5045 /wd4701 /wd4820 /wd4996 /WX
 if "%1" == "release" (
     set BASE_FLAGS=/O2
 ) else (

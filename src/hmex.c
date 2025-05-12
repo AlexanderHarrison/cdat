@@ -94,7 +94,7 @@ void parse_args(int argc, const char *argv[]) {
     }
 
     if (args.devkitppc_path == NULL) {
-        fprintf(stderr, ERROR "$DEVKITPPC environment variable is not set! \
+        fprintf(stderr, ERROR_STR "$DEVKITPPC environment variable is not set! \
 Please install devkitpro and the PPC/Gamecube package, \
 and ensure the DEVKITPPC environment variable is set.\n");
         print_usage = true;
@@ -104,7 +104,7 @@ and ensure the DEVKITPPC environment variable is set.\n");
     }
 
     if (args.input_filepaths_count == 0) {
-        fprintf(stderr, ERROR "No input files passed! Use '-i' to pass input files.\n");
+        fprintf(stderr, ERROR_STR "No input files passed! Use '-i' to pass input files.\n");
         print_usage = true;
         err = true;
     } else {
@@ -115,7 +115,7 @@ and ensure the DEVKITPPC environment variable is set.\n");
     }
 
     if (args.symbol_table_path == NULL) {
-        fprintf(stderr, ERROR "No symbol table passed! Use '-t' to pass a symbol table path.\n");
+        fprintf(stderr, ERROR_STR "No symbol table passed! Use '-t' to pass a symbol table path.\n");
         print_usage = true;
         err = true;
     } else {
@@ -123,7 +123,7 @@ and ensure the DEVKITPPC environment variable is set.\n");
     }
 
     if (args.output_dat_path == NULL) {
-        fprintf(stderr, ERROR "No output dat path passed! Use '-o' to pass an output dat path.\n");
+        fprintf(stderr, ERROR_STR "No output dat path passed! Use '-o' to pass an output dat path.\n");
         print_usage = true;
         err = true;
     }
@@ -310,7 +310,7 @@ int main(int argc, const char *argv[]) {
 
             if (dat_file_import(input_dat_bytes, (uint32_t)size, &dat) != DAT_SUCCESS) {
                 fprintf(stderr,
-                    ERROR "Could not import dat file '%s'. File is not a dat file or is malformed.\n",
+                    ERROR_STR "Could not import dat file '%s'. File is not a dat file or is malformed.\n",
                     args.input_dat_path
                 );
                 exit(1);
@@ -408,7 +408,7 @@ int main(int argc, const char *argv[]) {
             if (err) {
                 fprintf(
                     stderr,
-                    WARNING "%s:%lu Malformed entry in melee link table\n",
+                    WARNING_STR "%s:%llu Malformed entry in melee link table\n",
                     args.link_table_path,
                     line
                 );
@@ -441,7 +441,7 @@ int main(int argc, const char *argv[]) {
         printf("executing: %s\n", cmd);
         int ret = system(cmd);
         if (ret != 0) {
-            fprintf(stderr, ERROR "compilation failed\n");
+            fprintf(stderr, ERROR_STR "compilation failed\n");
             exit(1);
         }
     }
@@ -595,7 +595,7 @@ int main(int argc, const char *argv[]) {
                     }
 
                     if (location == 0) {
-                        fprintf(stderr, ERROR "Undefined symbol: %s\n", sym_name);
+                        fprintf(stderr, ERROR_STR "Undefined symbol: %s\n", sym_name);
                         link_err = true;
                     }
                 } else {

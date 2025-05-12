@@ -43,7 +43,7 @@ DatRootInfo *find_root(DatFile *dat, const char *root_name) {
             return r;
     }
     
-    fprintf(stderr, ERROR "root '%s' not found.\n", root_name);
+    fprintf(stderr, ERROR_STR "root '%s' not found.\n", root_name);
     exit(1);
 }
 

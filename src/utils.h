@@ -10,7 +10,12 @@
 #include <stdlib.h>
 #include <stdarg.h>
 
+#ifdef _WIN32
+#define WIN32
+#endif
+
 #ifdef WIN32
+    #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
     
     // TODO: check path permissions on windows
@@ -27,13 +32,13 @@
 #define YELLOW_CODE "\033[33m"
 #define RESET_CODE "\033[0m"
 
-#define ERROR RED_CODE "ERROR: " RESET_CODE
-#define WARNING YELLOW_CODE "WARNING: " RESET_CODE
+#define ERROR_STR RED_CODE "ERROR: " RESET_CODE
+#define WARNING_STR YELLOW_CODE "WARNING: " RESET_CODE
 
-#if defined(WIN32) || defined(_WIN32) 
-#define PATH_SEPARATOR "\\"
+#ifdef WIN32 
+    #define PATH_SEPARATOR "\\"
 #else
-#define PATH_SEPARATOR "/"
+    #define PATH_SEPARATOR "/"
 #endif
 
 #define expect(A) do {\
@@ -44,6 +49,20 @@
 } while (0)
 
 #define dat_expect(A) expect(A == DAT_SUCCESS)
+
+// windows doesn't like strerror :(
+char *my_strerror(int err) {
+    #ifdef WIN32
+        __declspec(thread) static char *buf = NULL;
+        if (buf == NULL)
+            buf = malloc(256);
+
+        strerror_s(buf, 256, err);
+        return buf;
+    #else
+        return strerror(err);
+    #endif
+}
 
 bool path_exists(const char *path) {
     #ifdef WIN32
@@ -59,13 +78,14 @@ bool path_exists(const char *path) {
 bool check_path_access(const char *path, int permissions) {
     #ifdef WIN32
         // TODO - check path permissions on windows
+        (void)permissions;
         return path_exists(path);
     #else
         if (access(path, permissions) != 0) {
             fprintf(stderr,
-                ERROR "Could not access '%s': %s\n",
+                ERROR_STR "Could not access '%s': %s\n",
                 path,
-                strerror(errno)
+                my_strerror(errno)
             );
             return true;
         }
@@ -79,18 +99,18 @@ bool write_file(const char *path, uint8_t *buf, uint64_t bufsize) {
     FILE *f = fopen(path, "w+");
     if (f == NULL) {
         fprintf(stderr,
-            ERROR "Could not open or create file '%s': %s\n",
+            ERROR_STR "Could not open or create file '%s': %s\n",
             path,
-            strerror(errno)
+            my_strerror(errno)
         );
         return true;
     }
     
     if (fwrite(buf, bufsize, 1, f) != 1) {
         fprintf(stderr,
-            ERROR "Could not write file '%s': %s\n",
+            ERROR_STR "Could not write file '%s': %s\n",
             path,
-            strerror(errno)
+            my_strerror(errno)
         );
         return true;
     }
@@ -105,9 +125,9 @@ bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
     struct stat stats;
     if (stat(path, &stats) != 0) {
         fprintf(stderr,
-            ERROR "Could not determine the size of '%s': %s\n",
+            ERROR_STR "Could not determine the size of '%s': %s\n",
             path,
-            strerror(errno)
+            my_strerror(errno)
         );
         return true;
     }
@@ -116,7 +136,7 @@ bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
     *out_buf = malloc((uint64_t)stats.st_size);
     if (*out_buf == NULL) {
         fprintf(stderr,
-            ERROR "File '%s' is too large to fit in memory\n",
+            ERROR_STR "File '%s' is too large to fit in memory\n",
             path
         );
         return true;
@@ -125,18 +145,18 @@ bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
     FILE *f = fopen(path, "r");
     if (f == NULL) {
         fprintf(stderr,
-            ERROR "Could not open file '%s': %s\n",
+            ERROR_STR "Could not open file '%s': %s\n",
             path,
-            strerror(errno)
+            my_strerror(errno)
         );
         return true;
     }
     
     if (fread(*out_buf, (size_t)stats.st_size, 1, f) != 1) {
         fprintf(stderr,
-            ERROR "Could not read file '%s': %s\n",
+            ERROR_STR "Could not read file '%s': %s\n",
             path,
-            strerror(errno)
+            my_strerror(errno)
         );
         return true;
     }
@@ -229,7 +249,7 @@ void read_args(
             SingleArgFlag *flag = &single_arg_flags[flag_i];
             if (strcmp(arg, flag->name) == 0) {
                 if (arg_i >= argc) {
-                    fprintf(stderr, ERROR "No argument passed for '%s' flag.\n", flag->name);
+                    fprintf(stderr, ERROR_STR "No argument passed for '%s' flag.\n", flag->name);
                 } else {
                     *flag->target = argv[arg_i++]; 
                     arg_handled = true;
@@ -249,7 +269,7 @@ void read_args(
                     if (input[0] == '-') {
                         break;
                     } else if (*flag->target_count == MAX_INPUT_FILES) {
-                        fprintf(stderr, ERROR "Max number of arguments exceeded. Skipping '%s'.\n", input);
+                        fprintf(stderr, ERROR_STR "Max number of arguments exceeded. Skipping '%s'.\n", input);
                     } else {
                         (*flag->target)[(*flag->target_count)++] = input;
                         arg_handled = true;
@@ -260,7 +280,7 @@ void read_args(
         }
         
         if (!arg_handled)
-            fprintf(stderr, ERROR "Unknown flag '%s'.\n", arg);
+            fprintf(stderr, ERROR_STR "Unknown flag '%s'.\n", arg);
         
         next_arg: NULL;
     }

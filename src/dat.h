@@ -4,7 +4,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <byteswap.h>
+
+#if defined(WIN32) || defined(_WIN32)
+    #define bswap_16(x) _byteswap_ushort(x)
+    #define bswap_32(x) _byteswap_ulong(x)
+#else
+    #include <byteswap.h>
+#endif
 
 #define READ_U16(ptr) bswap_16(*(const uint16_t*)(ptr))
 #define READ_I16(ptr) ((int16_t)bswap_16(*(const uint16_t*)(ptr)))
