@@ -110,10 +110,11 @@ Lasts from the end of the external ref table until the end of the file.
 ### m-ex Executable Format
 
 A mex executable starts with a custom root node.
-This root node is defined by the executable loader.
-For example, TM-CE looks for a root node called 'evFunction'.
+When loading the executable, the loader will look for a specific root node name.
+This name depends on the context.
+For example, TM-CE looks for a root node called 'evFunction' when loading events.
 
-This root node points to this object: 
+This root node points to a `MEXExe` object in the dat file: 
 ```c
 struct MEXExe {
     u8 *code;                       // 0x0
@@ -127,20 +128,19 @@ struct MEXExe {
     u32 debug_symbol_count;         // 0x18
     MEXDebugSymbol *debug_symbols;  // 0x1c
 };
+```
 
+#### MEXFunction
+
+```c
 struct MEXFunction {
     u32 index;       // 0x0
     u32 code_offset; // 0x4
 };
-
-struct MEXReloc {
-    u32 cmd_and_code_offset; // 0x0
-    u32 reloc;               // 0x4
-};
 ```
 
-When compiling with hmex or MexTK, you pass a symbol file.
-For example, evFunction.txt:
+When compiling with hmex or MexTK, you pass a symbol file with the -t flag.
+For example, TM-CE events use evFunction.txt:
 ```
 Event_Init
 Event_Update
@@ -150,7 +150,17 @@ Event_Menu
 
 These symbols correspond to `MEXFunctions`.
 For example, the `MEXFunction` with index 2 is the function `Event_Think`.
-The `code_offset` field offsets into the `code` field given in `MEXExe`.
+The `code_offset` field offsets into the `code` field given in `MEXExe`,
+giving the symbol's location.
+
+#### MEXReloc
+
+```c
+struct MEXReloc {
+    u32 cmd_and_code_offset; // 0x0
+    u32 reloc;               // 0x4
+};
+```
 
 The `MEXReloc` table contains relocation information for instructions.
 Instructions cannot be relocated like pointers, they are more complex,
@@ -169,7 +179,7 @@ If the instruction is linked to a function or address in the dat file,
 then it is the code offset to the target address.
 
 ## [HSDRaw](https://github.com/Ploaj/HSDLib/) vs cdat
-HSDRaw and cdat serve different purposes.
+While MexTK and hmex serve very similar purposes, HSDRaw and cdat serve different purposes.
 HSDRaw is specifically tuned for melee's dat files and their object types.
 CDat does not know or care about the object types contained inside dat files.
 Another HSDRaw could be built on top of cdat, using cdat to read and modify dat files.
