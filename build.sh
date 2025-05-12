@@ -8,7 +8,7 @@ if [ "$1" = 'release' ]; then
 else
     BASE_FLAGS="-ggdb"
 fi
-PATH_FLAGS="-I/usr/local/lib -I/usr/local/include"
+PATH_FLAGS="-I/usr/include -I/usr/lib -I/usr/local/lib -I/usr/local/include"
 LINK_FLAGS=""
 
 export GCC_COLORS="warning=01;33"
