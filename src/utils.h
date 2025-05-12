@@ -4,12 +4,23 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-#include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+
+#ifdef WIN32
+    #include <windows.h>
+    
+    // TODO: check path permissions on windows
+    #define R_OK 0
+    #define W_OK 0
+    #define X_OK 0
+    #define F_OK 0
+#else
+    #include <unistd.h>
+#endif
 
 #define RED_CODE "\033[31m"
 #define GREEN_CODE "\033[32m"
@@ -34,22 +45,32 @@
 
 #define dat_expect(A) expect(A == DAT_SUCCESS)
 
+bool path_exists(const char *path) {
+    #ifdef WIN32
+        DWORD fileAttr = GetFileAttributesA(path);
+        return fileAttr != INVALID_FILE_ATTRIBUTES;
+    #else
+        return access(path, F_OK) == 0;
+    #endif
+}
+
 // Returns true and prints an error if either
 // the path does not exist, or it does not have the required permissions. 
 bool check_path_access(const char *path, int permissions) {
-    if (access(path, permissions) != 0) {
-        fprintf(stderr,
-            ERROR "Could not access '%s': %s\n",
-            path,
-            strerror(errno)
-        );
-        return true;
-    }
-    return false;
-}
-
-bool path_exists(const char *path) {
-    return access(path, F_OK) == 0;
+    #ifdef WIN32
+        // TODO - check path permissions on windows
+        return path_exists(path);
+    #else
+        if (access(path, permissions) != 0) {
+            fprintf(stderr,
+                ERROR "Could not access '%s': %s\n",
+                path,
+                strerror(errno)
+            );
+            return true;
+        }
+        return false;
+    #endif
 }
 
 // Returns true and prints an error if the 
