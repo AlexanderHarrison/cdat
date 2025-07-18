@@ -96,7 +96,7 @@ bool check_path_access(const char *path, int permissions) {
 // Returns true and prints an error if the 
 // file could not be written or created.
 bool write_file(const char *path, uint8_t *buf, uint64_t bufsize) {
-    FILE *f = fopen(path, "w+");
+    FILE *f = fopen(path, "wb");
     if (f == NULL) {
         fprintf(stderr,
             ERROR_STR "Could not open or create file '%s': %s\n",
@@ -142,7 +142,7 @@ bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
         return true;
     }
     
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     if (f == NULL) {
         fprintf(stderr,
             ERROR_STR "Could not open file '%s': %s\n",
@@ -265,17 +265,20 @@ void read_args(
                 
                 // take while next argument doesn't start with '-'
                 while (arg_i < argc) {
-                    const char *input = argv[arg_i++];
+                    const char *input = argv[arg_i];
                     if (input[0] == '-') {
                         break;
                     } else if (*flag->target_count == MAX_INPUT_FILES) {
                         fprintf(stderr, ERROR_STR "Max number of arguments exceeded. Skipping '%s'.\n", input);
+                        arg_i++;
                     } else {
                         (*flag->target)[(*flag->target_count)++] = input;
                         arg_handled = true;
-                        goto next_arg;
+                        arg_i++;
                     }
                 }
+                
+                goto next_arg;
             }
         }
         
