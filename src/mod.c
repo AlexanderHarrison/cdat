@@ -78,8 +78,8 @@ int main(int argc, const char *argv[]) {
         
         // add extension 
         char *dat_path_out = malloc(strlen(root_name) + 4 + 1);
-        char *ext = my_stpcpy(dat_path_out, root_name);
-        my_stpcpy(ext, ".dat");
+        char *ext = push_str(dat_path_out, root_name);
+        push_str(ext, ".dat");
         
         // copy root
         DatFile out;

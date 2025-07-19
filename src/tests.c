@@ -1,5 +1,6 @@
 #include "dat.h"
 #include "dat.c"
+#include "utils.h"
 
 void print_err(const char *test_name, int line, const char *cond) {
     fprintf(stderr, "TEST \"%s\" FAILED\n", test_name);
@@ -10,8 +11,127 @@ void print_err(const char *test_name, int line, const char *cond) {
 #define TEST_INNER(A, C) if ((A) C) print_err(test_name, __LINE__, #A)
 #define DAT_TEST(A) TEST_INNER(A, != DAT_SUCCESS)
 #define EXPECT(A) TEST_INNER(A, == false)
+#define STR_EXPECT_FREE(A, B) do { char *_a; EXPECT(strcmp(_a = A, B) == 0); free(_a); } while (0)
+#define STR_EXPECT(A, B) EXPECT(strcmp(A, B) == 0)
+
+void test_dat(void);
+void test_map(void);
+void test_path_utils(void);
 
 int main(void) {
+    test_path_utils();
+    // test_map();
+    // test_dat();
+    
+    return 0;
+}
+
+void test_path_utils(void) {
+    const char *test_name = "";
+    
+    {
+        test_name = "inner_name";
+        STR_EXPECT_FREE(inner_name("test/abcd.xyz"), "abcd");
+        STR_EXPECT_FREE(inner_name("abcd"), "abcd");
+        STR_EXPECT_FREE(inner_name(""), "");
+        STR_EXPECT_FREE(inner_name(".test.abc"), ".test");
+        STR_EXPECT_FREE(inner_name("/temp/.test.abc"), ".test");
+        STR_EXPECT_FREE(inner_name("/temp/.test"), ".test");
+        STR_EXPECT_FREE(inner_name(".test"), ".test");
+    }
+    
+    {
+        test_name = "strip_ext";
+        char buf[32];
+        
+        strcpy(buf, "test/abcd.xyz"); strip_ext(buf); STR_EXPECT(buf, "test/abcd");
+        strcpy(buf, "test/abcd"); strip_ext(buf); STR_EXPECT(buf, "test/abcd");
+        strcpy(buf, "test/abcd.a.xyz"); strip_ext(buf); STR_EXPECT(buf, "test/abcd.a");
+        strcpy(buf, ".abcd"); strip_ext(buf); STR_EXPECT(buf, ".abcd");
+        strcpy(buf, ".abcd.xyz"); strip_ext(buf); STR_EXPECT(buf, ".abcd");
+        strcpy(buf, ""); strip_ext(buf); STR_EXPECT(buf, "");
+    }
+    
+    {
+        test_name = "strip_filename";
+        char buf[32];
+        
+        strcpy(buf, "test/abcd.xyz"); strip_filename(buf); STR_EXPECT(buf, "test/");
+        strcpy(buf, "/test/abcd.xyz"); strip_filename(buf); STR_EXPECT(buf, "/test/");
+        strcpy(buf, "./"); strip_filename(buf); STR_EXPECT(buf, "./");
+        strcpy(buf, "./testing/t"); strip_filename(buf); STR_EXPECT(buf, "./testing/");
+        strcpy(buf, "./testing/"); strip_filename(buf); STR_EXPECT(buf, "./testing/");
+        strcpy(buf, "~/.././testing"); strip_filename(buf); STR_EXPECT(buf, "~/.././");
+        strcpy(buf, ""); strip_filename(buf); STR_EXPECT(buf, "");
+    }
+    
+    {
+        test_name = "filename";
+        STR_EXPECT(filename("test.xyz"), "test.xyz");
+        STR_EXPECT(filename("a/b/test.xyz"), "test.xyz");
+        STR_EXPECT(filename("/a//test.xyz"), "test.xyz");
+        STR_EXPECT(filename("/a//test"), "test");
+        STR_EXPECT(filename("/a//"), "");
+    }
+}
+
+void test_map(void) {
+    const char *test_name = "";
+    Map map = map_alloc(2);
+    
+    {
+        test_name = "insert lookup";
+        
+        EXPECT(!map_insert(&map, map_hash_str("testing"), 1234));
+        uint32_t *res = map_find(&map, map_hash_str("testing"));
+        EXPECT(res != NULL);
+        EXPECT(*res == 1234);
+        
+        EXPECT(map_find(&map, map_hash_str("123")) == NULL);
+        
+        EXPECT(map_remove(&map, map_hash_str("123")));
+        EXPECT(!map_remove(&map, map_hash_str("testing")));
+        EXPECT(map_find(&map, map_hash_str("testing")) == NULL);
+    }
+    
+    {
+        test_name = "fill";
+        
+        EXPECT(!map_insert(&map, map_hash_str("1"), 1));
+        EXPECT(!map_insert(&map, map_hash_str("2"), 2));
+        EXPECT(!map_insert(&map, map_hash_str("3"), 3));
+        EXPECT(!map_insert(&map, map_hash_str("4"), 4));
+        
+        EXPECT(*map_find(&map, map_hash_str("1")) == 1);
+        EXPECT(*map_find(&map, map_hash_str("2")) == 2);
+        EXPECT(*map_find(&map, map_hash_str("3")) == 3);
+        EXPECT(*map_find(&map, map_hash_str("4")) == 4);
+        
+        EXPECT(map_insert(&map, map_hash_str("5"), 5));
+        EXPECT(!map_remove(&map, map_hash_str("2")));
+        EXPECT(map_find(&map, map_hash_str("2")) == NULL);
+        EXPECT(!map_insert(&map, map_hash_str("5"), 5));
+        
+        EXPECT(*map_find(&map, map_hash_str("1")) == 1);
+        EXPECT(map_find(&map, map_hash_str("2")) == NULL);
+        EXPECT(*map_find(&map, map_hash_str("3")) == 3);
+        EXPECT(*map_find(&map, map_hash_str("4")) == 4);
+        EXPECT(*map_find(&map, map_hash_str("5")) == 5);
+    }
+    
+    {
+        test_name = "hashing";
+        
+        EXPECT(map_hash_str("") == map_hash_str_len("", 0));
+        EXPECT(map_hash_str("a") == map_hash_str_len("a", 1));
+        EXPECT(map_hash_str("testing") == map_hash_str_len("testing", 7));
+    }
+        
+    
+    map_free(&map);
+}
+
+void test_dat(void) {
     const char *test_name = "";
     DatFile dat;
     
@@ -258,6 +378,4 @@ int main(void) {
     }
     
     DAT_TEST(dat_file_destroy(&dat));
-    
-    return 0;
 }

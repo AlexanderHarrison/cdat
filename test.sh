@@ -8,5 +8,4 @@ LINK_FLAGS=""
 
 export GCC_COLORS="warning=01;33"
 
-/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} ${SAN_FLAGS} src/tests.c \
-    ${LINK_FLAGS} -o tests && ./tests
+/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} ${SAN_FLAGS} src/tests.c ${LINK_FLAGS} -o build/tests && build/tests

@@ -11,11 +11,9 @@ fi
 PATH_FLAGS="-I/usr/include -I/usr/lib -I/usr/local/lib -I/usr/local/include"
 LINK_FLAGS=""
 
-export GCC_COLORS="warning=01;33"
-
-/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/mod.c ${LINK_FLAGS} -o dat_mod
-/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/hmex.c ${LINK_FLAGS} -o hmex
+/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/mod.c ${LINK_FLAGS} -o build/dat_mod
+/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/hmex.c ${LINK_FLAGS} -o build/hmex
 
 if [ "$1" = 'release' ]; then
-    strip dat_mod hmex
+    strip build/dat_mod build/hmex
 fi

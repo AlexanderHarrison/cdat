@@ -27,6 +27,9 @@
     #include <unistd.h>
 #endif
 
+#define countof(A) (sizeof(A)/sizeof(*(A)))
+#define align_up(p, align) (((uint64_t)(p) + ((uint64_t)align) - 1) & ~(((uint64_t)align) - 1))
+
 #define RED_CODE "\033[31m"
 #define GREEN_CODE "\033[32m"
 #define YELLOW_CODE "\033[33m"
@@ -34,12 +37,6 @@
 
 #define ERROR_STR RED_CODE "ERROR: " RESET_CODE
 #define WARNING_STR YELLOW_CODE "WARNING: " RESET_CODE
-
-#ifdef WIN32 
-    #define PATH_SEPARATOR "\\"
-#else
-    #define PATH_SEPARATOR "/"
-#endif
 
 #define expect(A) do {\
     if (!(A)) {\
@@ -50,8 +47,132 @@
 
 #define dat_expect(A) expect(A == DAT_SUCCESS)
 
+// UINT MAP ------------------------------------------------------
+
+typedef struct Map {
+    uint32_t *hashes;
+    uint32_t *values;
+    uint32_t log_size;
+} Map;
+
+Map map_alloc(uint32_t log_size) {
+    uint64_t size = 1ul << log_size;
+    uint32_t *alloc = calloc(2, size * sizeof(uint32_t));
+    uint32_t *hashes = alloc;
+    uint32_t *values = alloc + size;
+    return (Map) { hashes, values, log_size };
+}
+
+Map map_alloc_n(uint32_t ele_count) {
+    // alloc space for 2x elements
+    uint32_t log_size;
+    if (ele_count == 0)
+        log_size = 1;
+    else
+        log_size = (uint32_t)32 - (uint32_t)__builtin_clzl(ele_count);
+    return map_alloc(log_size + 1);
+}
+
+void map_free(Map *map) {
+    free(map->hashes);
+}
+
+void map_clear(Map *map) {
+    uint64_t size = 1ul << map->log_size;
+    memset(map->hashes, 0, size * sizeof(uint32_t));
+}
+
+// returns idx
+uint32_t *map_find(Map *map, uint32_t hash) {
+    uint32_t size = 1ul << map->log_size;
+    uint32_t mask = size - 1;
+    uint32_t orig_idx = hash & mask;
+    uint32_t idx = orig_idx;
+    
+    while (1) {
+        uint32_t idx_hash = map->hashes[idx];
+        if (idx_hash == hash)
+            return &map->values[idx];
+        if (idx_hash == 0)
+            return NULL;
+        idx = (idx + 1) & mask;
+        if (idx == orig_idx)
+            return NULL;
+    }
+}
+
+// returns true on full
+bool map_insert(Map *map, uint32_t hash, uint32_t value) {
+    uint32_t size = 1ul << map->log_size;
+    uint32_t mask = size - 1;
+    uint32_t orig_idx = hash & mask;
+    uint32_t idx = orig_idx;
+    
+    while (1) {
+        uint32_t idx_hash = map->hashes[idx];
+        if (idx_hash < 2) {
+            map->hashes[idx] = hash;
+            map->values[idx] = value;
+            return false;
+        } 
+        idx = (idx + 1) & mask;
+        if (idx == orig_idx)
+            return true;
+    }
+}
+
+// returns true if doesn't exist
+bool map_remove(Map *map, uint32_t hash) {
+    uint32_t size = 1ul << map->log_size;
+    uint32_t mask = size - 1;
+    uint32_t orig_idx = hash & mask;
+    uint32_t idx = orig_idx;
+    
+    while (1) {
+        uint32_t idx_hash = map->hashes[idx];
+        if (idx_hash == hash) {
+            map->hashes[idx] = 1;
+            return false;
+        }
+        if (idx_hash == 0)
+            return true;
+        idx = (idx + 1) & mask;
+        if (idx == orig_idx)
+            return true;
+    }
+}
+
+// Thanks to Andriy Makukha - https://stackoverflow.com/a/69812981
+uint32_t map_hash_str(const char* str) {
+    uint32_t h = 1234;
+    for (; *str; ++str) {
+        h = (uint32_t)h ^ (uint32_t)*str;
+        h *= (uint32_t)0x5bd1e995;
+        h ^= h >> 15;
+    }
+    if (h < 2)
+        h += 2;
+    return h;
+}
+
+uint32_t map_hash_str_len(const char* str, uint32_t len) {
+    uint32_t h = 1234;
+    for (; len; --len) {
+        h = (uint32_t)h ^ (uint32_t)*str;
+        h *= (uint32_t)0x5bd1e995;
+        h ^= h >> 15;
+        ++str;
+    }
+    if (h < 2)
+        h += 2;
+    return h;
+}
+
+// PATH AND IO STUFF ---------------------------------------------------
+
 // windows doesn't like strerror :(
-char *my_strerror(int err) {
+// I'm fine with the leak here, computation has probably ended if we are printing an error.
+char *strerror_portable(int err) {
     #ifdef WIN32
         __declspec(thread) static char *buf = NULL;
         if (buf == NULL)
@@ -85,7 +206,7 @@ bool check_path_access(const char *path, int permissions) {
             fprintf(stderr,
                 ERROR_STR "Could not access '%s': %s\n",
                 path,
-                my_strerror(errno)
+                strerror_portable(errno)
             );
             return true;
         }
@@ -101,7 +222,7 @@ bool write_file(const char *path, uint8_t *buf, uint64_t bufsize) {
         fprintf(stderr,
             ERROR_STR "Could not open or create file '%s': %s\n",
             path,
-            my_strerror(errno)
+            strerror_portable(errno)
         );
         return true;
     }
@@ -110,7 +231,7 @@ bool write_file(const char *path, uint8_t *buf, uint64_t bufsize) {
         fprintf(stderr,
             ERROR_STR "Could not write file '%s': %s\n",
             path,
-            my_strerror(errno)
+            strerror_portable(errno)
         );
         return true;
     }
@@ -119,15 +240,14 @@ bool write_file(const char *path, uint8_t *buf, uint64_t bufsize) {
 }
 
 // Returns true and prints an error if the file could not be read.
-// 
-// The returned buffer is allocated with malloc.
+// Allocates.
 bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
     struct stat stats;
     if (stat(path, &stats) != 0) {
         fprintf(stderr,
             ERROR_STR "Could not determine the size of '%s': %s\n",
             path,
-            my_strerror(errno)
+            strerror_portable(errno)
         );
         return true;
     }
@@ -147,7 +267,7 @@ bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
         fprintf(stderr,
             ERROR_STR "Could not open file '%s': %s\n",
             path,
-            my_strerror(errno)
+            strerror_portable(errno)
         );
         return true;
     }
@@ -156,7 +276,7 @@ bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
         fprintf(stderr,
             ERROR_STR "Could not read file '%s': %s\n",
             path,
-            my_strerror(errno)
+            strerror_portable(errno)
         );
         return true;
     }
@@ -166,6 +286,7 @@ bool read_file(const char *path, uint8_t **out_buf, uint64_t *out_size) {
 
 // Returns a null terminated array of pointers to lines.
 // Lines will not contain the newline and will be null terminated.
+// Allocates.
 uint8_t **read_lines(uint8_t *file, uint64_t file_size) {
     static uint8_t *static_nullptr = NULL;
     if (file_size == 0) return &static_nullptr;
@@ -289,8 +410,16 @@ void read_args(
     }
 }
 
-// these aren't portable in c99, so I wrote my own.
-char *my_stpcpy(char *buf, const char *str) {
+static inline bool is_path_separator(char c) {
+    #ifdef WIN32
+        return c == '/' || c == '\\';
+    #else
+        return c == '/';
+    #endif
+}
+
+// stpcpy isn't portable in c99.
+char *push_str(char *buf, const char *str) {
     while (1) {
         char c = *str;
         *buf = c;
@@ -300,20 +429,24 @@ char *my_stpcpy(char *buf, const char *str) {
         str++;
     }
 }
-char *my_strdup(const char *src) {
+
+// strdup isn't portable in c99.
+// Allocates.
+char *dup_str(const char *src) {
     char *str = malloc(strlen(src)+1);
     strcpy(str, src);
     return str;
 }
 
-// returns the filename without extension of the path. 
+// returns the filename without extension or the path.
+// Allocates.
 char *inner_name(const char *path) {
     // find last path separator
     uint64_t start = 0;
     uint64_t len = strlen(path);
     for (uint64_t i = 0; i < len; ++i) {
         char c = path[i];  
-        if (c == '/' || c == '\\')
+        if (is_path_separator(c))
             start = i+1;
     }
     
@@ -325,7 +458,7 @@ char *inner_name(const char *path) {
             period = i;
     }
     
-    char *inner = my_strdup(&path[start]);
+    char *inner = dup_str(&path[start]);
     
     // strip extension
     if (period != 0)
@@ -334,6 +467,49 @@ char *inner_name(const char *path) {
     return inner;
 }
 
+// strips extension, returning ptr to added null terminator
+char *strip_ext(char *path) {
+    char *curpath = path;
+    while (*curpath) curpath++;
+    char *end = curpath;
+    while (curpath > path) {
+        if (*curpath == '.') {
+            *curpath = 0;
+            return curpath;
+        }
+        curpath--;
+    }
+    return end;
+}
+
+// returns ptr to filename in path
+const char *filename(const char *path) {
+    const char *curpath = path;
+    while (*curpath) curpath++;
+    while (curpath > path) {
+        if (is_path_separator(curpath[-1]))
+            return curpath;
+        curpath--;
+    }
+    return path;
+}
+
+// strips file, returning ptr to added null terminator
+char *strip_filename(char *path) {
+    char *curpath = path;
+    while (*curpath) curpath++;
+    while (curpath > path) {
+        if (is_path_separator(curpath[-1])) {
+            *curpath = 0;
+            return curpath;
+        }
+        curpath--;
+    }
+    *path = 0;
+    return path;
+}
+
+// Allocates.
 char *path_join(const char *first, ...) {
     // iter args to count length
     uint64_t len = strlen(first);
@@ -348,22 +524,22 @@ char *path_join(const char *first, ...) {
     va_end(argp);
     
     char *path = malloc(len + 1); // space for terminator
-    char *curpath = my_stpcpy(path, first);
+    char *curpath = push_str(path, first);
     
     // iter args copying strings
     va_start(argp, first);
     while (1) {
         const char *arg = va_arg(argp, const char*);
         if (arg == NULL) break;
-        if (curpath > path && curpath[-1] != PATH_SEPARATOR[0])
-            curpath = my_stpcpy(curpath, PATH_SEPARATOR);
-        curpath = my_stpcpy(curpath, arg);
+        
+        if (curpath > path && !is_path_separator(curpath[-1]))
+            curpath = push_str(curpath, "/");
+
+        curpath = push_str(curpath, arg);
     }
     va_end(argp);
     
     return path;
 }
-
-#define countof(A) (sizeof(A)/sizeof(*A))
 
 #endif
