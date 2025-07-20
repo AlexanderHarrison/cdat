@@ -56,7 +56,7 @@ static inline uint32_t clzl(uint32_t n) {
     #else
         if (n == 0)
             return 32;
-        return __builtin_clzl(n);
+        return (uint32_t)__builtin_clzl(n);
     #endif
 }
 
