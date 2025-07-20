@@ -298,8 +298,12 @@ int main(int argc, const char *argv[]) {
     parse_args(argc, argv);
 
     char *gcc_path = path_join(args.devkitppc_path, "bin", "powerpc-eabi-gcc", NULL);
-    if (check_path_access(gcc_path, R_OK | X_OK))
-        exit(1);
+
+    // I HATE WINDOWS! WHY DOES THIS NOT WORK ON WINDOWS!!
+    #ifndef WIN32
+        if (check_path_access(gcc_path, R_OK | X_OK))
+            exit(1);
+    #endif
 
     // compile c files
     char **objs = malloc(args.input_filepaths_count * sizeof(*objs));
@@ -318,8 +322,16 @@ int main(int argc, const char *argv[]) {
             push_str(curobj, ".o");
             objs[i] = obj;
     
+            // build cmd
             char *curcmd = cmd;
-            curcmd = copy_arg (cmd, curcmd, gcc_path);
+
+            // I HATE WINDOWS! 'system' can't call quoted programs for some reason...
+            #ifdef WIN32
+                curcmd = copy_args(cmd, curcmd, gcc_path);
+            #else
+                curcmd = copy_arg(cmd, curcmd, gcc_path);
+            #endif
+
             curcmd = copy_args(cmd, curcmd, "-DGEKKO -mogc -mcpu=750 -meabi -mhard-float -fno-asynchronous-unwind-tables -c");
             curcmd = copy_args(cmd, curcmd, args.gcc_flags);
             curcmd = copy_arg (cmd, curcmd, "-o");
@@ -328,6 +340,7 @@ int main(int argc, const char *argv[]) {
             
             if ((args.flags & Arg_Quiet) == 0)
                 printf("%s\n", cmd);
+
             int ret = system(cmd);
             if (ret != 0) {
                 fprintf(stderr, ERROR_STR "compilation failed\n");

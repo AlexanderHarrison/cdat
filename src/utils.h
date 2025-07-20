@@ -17,6 +17,7 @@
 #ifdef WIN32
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
+    #include <intrin.h>
     
     // TODO: check path permissions on windows
     #define R_OK 0
@@ -49,6 +50,16 @@
 
 // UINT MAP ------------------------------------------------------
 
+static inline uint32_t clzl(uint32_t n) {
+    #ifdef WIN32
+        return _lzcnt_u32(n);
+    #else
+        if (n == 0)
+            return 32;
+        return __builtin_clzl(n);
+    #endif
+}
+
 typedef struct Map {
     uint32_t *hashes;
     uint32_t *values;
@@ -56,7 +67,7 @@ typedef struct Map {
 } Map;
 
 Map map_alloc(uint32_t log_size) {
-    uint64_t size = 1ul << log_size;
+    uint32_t size = 1ul << log_size;
     uint32_t *alloc = calloc(2, size * sizeof(uint32_t));
     uint32_t *hashes = alloc;
     uint32_t *values = alloc + size;
@@ -69,7 +80,7 @@ Map map_alloc_n(uint32_t ele_count) {
     if (ele_count == 0)
         log_size = 1;
     else
-        log_size = (uint32_t)32 - (uint32_t)__builtin_clzl(ele_count);
+        log_size = (uint32_t)32 - clzl(ele_count);
     return map_alloc(log_size + 1);
 }
 
@@ -78,7 +89,7 @@ void map_free(Map *map) {
 }
 
 void map_clear(Map *map) {
-    uint64_t size = 1ul << map->log_size;
+    uint32_t size = 1ul << map->log_size;
     memset(map->hashes, 0, size * sizeof(uint32_t));
 }
 
@@ -200,7 +211,15 @@ bool check_path_access(const char *path, int permissions) {
     #ifdef WIN32
         // TODO - check path permissions on windows
         (void)permissions;
-        return path_exists(path);
+        if (!path_exists(path)) {
+            fprintf(stderr,
+                ERROR_STR "Could not access '%s': %s.\n",
+                path,
+                strerror_portable(GetLastError())
+            );
+            return true;
+        }
+        return false;
     #else
         if (access(path, permissions) != 0) {
             fprintf(stderr,
@@ -294,6 +313,7 @@ uint8_t **read_lines(uint8_t *file, uint64_t file_size) {
     uint64_t line_count = 0;
     for (uint64_t i = 0; i < file_size; ++i) {
         uint8_t c = file[i];
+
         if (c == '\n')
             line_count++;
     }
@@ -309,9 +329,12 @@ uint8_t **read_lines(uint8_t *file, uint64_t file_size) {
         // parse line
         
         uint64_t line_i = 0;
+        uint8_t c = 0;
         while (1) {
             if (line_start + line_i >= file_size) break;
-            uint8_t c = file[line_start + line_i];
+            c = file[line_start + line_i];
+
+            if (c == '\r') break;
             if (c == '\n') break;
             line_i++;
         }
@@ -320,6 +343,9 @@ uint8_t **read_lines(uint8_t *file, uint64_t file_size) {
         memcpy(line, &file[line_start], line_i);
         line[line_i] = 0;
         line_table[line_table_i++] = line;
+
+        if (c == '\r')
+            line_i += 1;
         
         line_start += line_i + 1;
         if (line_start >= file_size) break;
@@ -534,7 +560,6 @@ char *path_join(const char *first, ...) {
         
         if (curpath > path && !is_path_separator(curpath[-1]))
             curpath = push_str(curpath, "/");
-
         curpath = push_str(curpath, arg);
     }
     va_end(argp);
