@@ -3,10 +3,7 @@
 - **cdat** (src/dat.c src/dat.h): a simple, portable library for reading, modifying, and saving dat files.
 - **dat_mod** (src/mod.c): a small command line utility for modifying dat files.
 - **hmex** (src/hmex.c): a fast and portable reimplementation of MexTK.
-Currently mostly working, but needs more testing.
 Function patching (a useful but undocumented feature of m-ex) is not yet implemented.
-
-
 
 ## CDat
 
@@ -14,8 +11,6 @@ CDat is a small library for reading, modifying, and saving dat files.
 This is the file format used to store assets in SSBM.
 They contain models, fighter physics data, animations, effects, textures.
 Notably, dat files do not contain code in SSBM - however, the m-ex dat format does.
-
-
 
 ## DatMod
 A very small wrapper around cdat for simple modification of dat files.
@@ -28,8 +23,6 @@ USAGE:
     dat_mod insert <dat file> <input dat file>
         Copy roots from one dat file into another.
 ```
-
-
 
 ## Hmex
 A partial reimplementation MexTK.
@@ -45,13 +38,15 @@ REQUIRED FLAGS:
     -o <output.dat>             : Output dat file.
 
 OPTIONAL FLAGS:
-    -h                          : Show hmex usage.
-    -dat <inputs.dat>           : Input dat file.
-                                    Is an empty dat file by default.
-    -f <gcc flags>              : Flags to pass to gcc. Optimization, warnings, etc.
-                                    Is '" DEFAULT_GCC_FLAGS "' by default.
-    -s <symbol name>            : Symbol name.
-                                    Is the symbol table filename (excluding extension) by default.
+    -h                   : Show hmex usage.
+    -c                   : Compile without linking into a dat file.
+    -q                   : Do not print to stdout.
+    -dat <inputs.dat>    : Input dat file.
+                            Is an empty dat file by default.
+    -f <gcc flags>       : Flags to pass to gcc. Optimization, warnings, etc.
+                            Is '" DEFAULT_GCC_FLAGS "' by default.
+    -s <symbol name>     : Symbol name.
+                            Is the symbol table filename (excluding extension) by default.
 ```
 
 Hmex and MexTK at their core convert elf files to a custom executable format used by the m-ex framework.
