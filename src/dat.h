@@ -90,16 +90,23 @@ const char *dat_return_string(DAT_RET ret);
 // Creates an empty dat file. Does not allocate.
 DAT_RET dat_file_new(DatFile *dat);
 
+// Frees allocations and zeros struct.
 DAT_RET dat_file_destroy(DatFile *dat);
 
 // `file` can be safely freed after this. All data is copied to internal allocations.
 // The size parameter is the size of the buffer containing the dat file, which must be larger
 // than the internal file size listed in the dat file header.
-// If it is smaller, DAT_ERR_INVALID_SIZE will be returned. 
+// If it is smaller, DAT_ERR_INVALID_SIZE will be returned.
+//
+// You may pass an uninitialized `out` ptr.
 DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out);
 
-// `dat` must not be NULL.
+// `dat` must not be NULL or this will crash.
 uint32_t dat_file_export_max_size(const DatFile *dat);
+
+// First call `dat_file_export_max_size`, then pass a buffer of at least that size to `dat_file_export`.
+//
+// UB if size is smaller than what `dat_file_export_max_size` returns!
 DAT_RET dat_file_export(const DatFile *dat, uint8_t *out, uint32_t *size);
 
 DAT_RET dat_file_debug_print(DatFile *dat);
