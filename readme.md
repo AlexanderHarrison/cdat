@@ -3,7 +3,7 @@
 - **cdat** (src/dat.c src/dat.h): a simple, portable library for reading, modifying, and saving dat files.
 - **dat_mod** (src/mod.c): a small command line utility for modifying dat files.
 - **hmex** (src/hmex.c): a fast and portable reimplementation of MexTK.
-Function patching (a useful but undocumented feature of m-ex) is not yet implemented.
+Function patching and debug symbols have not yet been implemented.
 
 ## CDat
 
@@ -44,7 +44,7 @@ OPTIONAL FLAGS:
     -dat <inputs.dat>    : Input dat file.
                             Is an empty dat file by default.
     -f <gcc flags>       : Flags to pass to gcc. Optimization, warnings, etc.
-                            Is '" DEFAULT_GCC_FLAGS "' by default.
+                            Is '-O2 -Wall -Wextra' by default.
     -s <symbol name>     : Symbol name.
                             Is the symbol table filename (excluding extension) by default.
 ```
@@ -57,12 +57,13 @@ so in practice hmex and mextk are c code to dat executable converters.
 To explain the m-ex format, you need to understand the dat format.
 
 
-### Dat files
-Dat files contain six sections.
+# Dat files
 
 **Please note that everything in a dat file is big endian!**
 
-#### **Header**:
+Dat files contain six sections.
+
+#### **Section 1: Header**:
 The header is always the first 32 (0x20) bytes of the file.
 
 ```c
@@ -76,7 +77,7 @@ struct DatHeader {
 };
 ```
 
-#### **Data Section**
+#### **Section 2: Data Section**
 The data section contains the bulk of a dat file.
 It is located right after the 32 byte header.
 This section contains "objects" which can contain data and pointers to other objects.
@@ -87,7 +88,7 @@ You can mostly reconstruct the size of the objects by using the relocation
 table to see where an object ends and another begins, but this is not guaranteed
 to be correct.
 
-#### **Relocation Table**
+#### **Section 3: Relocation Table**
 The data section contains objects that can point to each other.
 When this file is placed somewhere in memory,
 adding that memory address to every entry given by this table will
@@ -111,7 +112,7 @@ for (u32 i = 0; i < reloc_count; ++i)
     *(u32*)&data[reloc_table[i].data_offset] += dat_file_ptr;
 ```
 
-#### **Root Table**
+#### **Section 4: Root Table**
 This table contains names and pointers for important objects in the data section.
 
 This section is located right after the relocation table.
@@ -124,7 +125,7 @@ struct DatRootEntry {
 };
 ```
 
-#### **External Reference Table**
+#### **Section 5: Reference Table**
 This section is very similar to the root table section,
 and is placed immediately after it.
 The entry format is exactly the same as the root table.
@@ -133,16 +134,15 @@ This section isn't used much and I don't know what purpose it serves.
 I think these entries can be linked to other dat files somehow?
 I believe pokemon stadium uses it for transformations.
 
-#### **Symbol Table**
+#### **Section 6: Symbol Table**
 Contains null-terminated strings for the root and external ref tables.
 Lasts from the end of the external ref table until the end of the file.
 
-
-### m-ex Executable Format
+## m-ex Executable Format
 
 A mex executable starts with a custom root node.
 When loading the executable, the loader will look for a specific root node name.
-This name depends on the context.
+This name is set by the '-s' flag in hmex.
 For example, TM-CE looks for a root node called 'evFunction' when loading events.
 
 This root node points to a `MEXExe` object in the dat file: 
@@ -210,7 +210,7 @@ If the instruction is linked to a function or address in the dat file,
 then it is the code offset to the target address.
 
 ## [HSDRaw](https://github.com/Ploaj/HSDLib/) vs cdat
-While MexTK and hmex serve very similar purposes, HSDRaw and cdat serve different purposes.
+While MexTK and hmex serve similar purposes, HSDRaw and cdat serve different purposes.
 HSDRaw is specifically tuned for melee's dat files and their object types.
 CDat does not know or care about the object types contained inside dat files.
 Another HSDRaw could be built on top of cdat, using cdat to read and modify dat files.

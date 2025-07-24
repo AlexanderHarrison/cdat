@@ -172,8 +172,7 @@ typedef struct MEXReloc {
     uint32_t cmd_and_code_offset;
 
     // - If this is a melee symbol, this is the address of the symbol.
-    // - If this is an internal symbol, this is the offset of the symbol from the start of the data.
-    // For now, it means it is the elf offset.
+    // - If this is an internal symbol, this is the offset of the symbol from code start.
     //
     // I guess if location > 0x80000000 then it's handled differently within mex?
     uint32_t location;
