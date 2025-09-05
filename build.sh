@@ -17,9 +17,6 @@ fi
 if [[ -z $1 || $1 = 'release' || $1 = 'hmex' ]]; then
     /usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/hmex.c ${LINK_FLAGS} -o build/hmex
 fi
-if [[ -z $1 || $1 = 'release' || $1 = 'ml' ]]; then
-    /usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/ml.c ${LINK_FLAGS} -o build/ml # TEMP
-fi
 
 if [ "$1" = 'release' ]; then
     strip build/dat_mod build/hmex build/ml
