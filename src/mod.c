@@ -64,9 +64,76 @@ int main(int argc, const char *argv[]) {
     if (strcmp(arg1, "debug") == 0) {
         if (argc < 3)
             usage_exit();
-        
         DatFile dat = read_dat(argv[2]);
-        dat_file_debug_print(&dat);
+        
+        if (argc == 3) {
+            dat_file_debug_print(&dat);
+        } else {
+            // parse hex offset
+            const char *offset_str = argv[3];
+            const char *cur_offset_str = offset_str;
+            
+            if (offset_str[0] == '0' && (offset_str[1] == 'x' || offset_str[1] == 'X'))
+                cur_offset_str += 2;
+            
+            uint32_t offset = 0;
+            while (*cur_offset_str) {
+                offset <<= 4;
+                char c = *cur_offset_str;
+                if ('0' <= c && c <= '9')
+                    offset |= (uint32_t)(c - '0');
+                else if ('a' <= c && c <= 'f')
+                    offset |= (uint32_t)(c - 'a' + 10);
+                else if ('A' <= c && c <= 'F')
+                    offset |= (uint32_t)(c - 'A' + 10);
+                else {
+                    fprintf(stderr, ERROR_STR "invalid offset %s\n", offset_str);
+                    exit(1);
+                }
+                cur_offset_str++;
+            }
+            
+            // find object
+            DatSlice object;
+            DAT_RET err = dat_obj_location(&dat, offset, &object);
+            if (err != DAT_SUCCESS) {
+                fprintf(stderr, ERROR_STR "no object at offset %s\n", offset_str);
+                exit(1);
+            }
+            
+            DatRef i = object.offset;
+            for (uint32_t o = 0; o < i%4; ++o) printf("  ");
+            for (; i%4 != 0; ++i) printf("%02x", dat.data[i]);
+            
+            DatRef object_end = object.offset + object.size;
+            DatRef object_end_aligned = object_end & ~3u;
+            for (; i < object_end_aligned; i += 4) {
+                uint32_t word;
+                dat_expect(dat_obj_read_u32(&dat, i, &word));
+                
+                // check is reference
+                bool is_ref = false;
+                for (uint32_t reloc_i = 0; reloc_i < dat.reloc_count; ++reloc_i) {
+                    if (dat.reloc_targets[reloc_i] == i) {
+                        is_ref = true;
+                        break;
+                    }
+                }
+                
+                printf("%06x  %8x", i, word);
+                
+                if (is_ref) {
+                    DatSlice ref;
+                    dat_expect(dat_obj_location(&dat, word, &ref));
+                    printf("  -> 0x%x-0x%x (0x%x)\n", ref.offset, ref.offset + ref.size, ref.size);
+                } else {
+                    printf("\n");
+                }
+            }
+            for (; i < object_end; ++i) printf("%02x", dat.data[i]);
+            
+            printf("OBJECT 0x%x-0x%x (0x%x)\n", object.offset, object.offset + object.size, object.size);
+        }
     } else if (strcmp(arg1, "extract") == 0) {
         if (argc < 4)
             usage_exit(); 

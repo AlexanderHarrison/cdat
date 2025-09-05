@@ -1,6 +1,7 @@
 #include "dat.h"
 #include "dat.c"
 #include "utils.h"
+#include "ml.h"
 
 void print_err(const char *test_name, int line, const char *cond) {
     fprintf(stderr, "TEST \"%s\" FAILED\n", test_name);
@@ -14,16 +15,66 @@ void print_err(const char *test_name, int line, const char *cond) {
 #define STR_EXPECT_FREE(A, B) do { char *_a; EXPECT(strcmp(_a = A, B) == 0); free(_a); } while (0)
 #define STR_EXPECT(A, B) EXPECT(strcmp(A, B) == 0)
 
+void test_ml(void);
 void test_dat(void);
 void test_map(void);
 void test_path_utils(void);
 
 int main(void) {
-    test_path_utils();
+    // test_path_utils();
     // test_map();
     // test_dat();
-    
+    test_ml();
+
     return 0;
+}
+
+void pjobj(DatFile *grps, ML_JObjDesc *jobjdesc) {
+    // float x = ML_ReadF32(jobjdesc->position.x);
+    // float y = ML_ReadF32(jobjdesc->position.y);
+    // float z = ML_ReadF32(jobjdesc->position.z);
+    // printf("%.1f %.1f %.1f\n", x, y, z);
+    if (ML_IsNonNull(jobjdesc->next)) {
+        pjobj(grps, ML_ReadRef_JObjDesc(grps, jobjdesc->next));
+    }
+}
+
+void test_ml(void) {
+    const char *test_name = "";
+    DatFile grps;
+    
+    {
+        test_name = "import ssbm grps dat";
+        
+        // file io
+        FILE *grps_f = fopen("GrPs.dat", "r");
+        EXPECT(fseek(grps_f, 0, SEEK_END) >= 0);
+        int64_t ftell_ret = ftell(grps_f);
+        EXPECT(ftell_ret > 0);
+        EXPECT(fseek(grps_f, 0, SEEK_SET) >= 0);
+        uint32_t grps_size = (uint32_t)ftell_ret; 
+        uint8_t *grps_buf = malloc(grps_size);
+        EXPECT(grps_buf != NULL);
+        EXPECT(fread(grps_buf, grps_size, 1, grps_f) == 1);
+        
+        DAT_TEST(dat_file_import(grps_buf, grps_size, &grps));
+        free(grps_buf);
+    }
+    
+    {
+        DatRef map_head_offset;
+        DAT_TEST(dat_root_find(&grps, "map_head", &map_head_offset));
+        ML_MapHead *map_head = ML_ReadDatRef(&grps, map_head_offset);
+        int map_head_count = ML_ReadI32(map_head->map_gobjdesc_count);
+        
+        for (int i = 0; i < map_head_count; ++i) {
+            ML_MapGObjDesc *map_gobjdesc = ML_ReadRef_MapGObjDesc(&grps, map_head->map_gobjdescs) + i;
+            ML_JObjDesc *jobjdesc = ML_ReadRef_JObjDesc(&grps, map_gobjdesc->jobjset.jobjdesc);
+            // pjobj(&grps, jobjdesc);
+        }
+    }
+    
+    DAT_TEST(dat_file_destroy(&grps));
 }
 
 void test_path_utils(void) {
@@ -189,6 +240,19 @@ void test_dat(void) {
         info = dat.root_info[2];
         EXPECT(info.data_offset == root3_ref);
         EXPECT(strcmp(dat.symbols + info.symbol_offset, root3) == 0);
+        
+        // find
+        
+        DatRef found_ref1, found_ref2, found_ref3;
+        
+        DAT_TEST(dat_root_find(&dat, root1, &found_ref1));
+        DAT_TEST(dat_root_find(&dat, root2, &found_ref2));
+        DAT_TEST(dat_root_find(&dat, root3, &found_ref3));
+        EXPECT(found_ref1 == root1_ref);
+        EXPECT(found_ref2 == root2_ref);
+        EXPECT(found_ref3 == root3_ref);
+        
+        EXPECT(dat_root_find(&dat, "asdhaksjdh", &found_ref1) != DAT_SUCCESS);
         
         // remove
         

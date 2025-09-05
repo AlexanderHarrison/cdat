@@ -76,7 +76,7 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out)
     if (out->reloc_targets == NULL) { dat_file_destroy(out); return DAT_ERR_ALLOCATION_FAILURE; }
     memcpy(out->reloc_targets, file + reloc_offset, reloc_size);
     for (uint32_t i = 0; i < reloc_count; ++i)
-        out->reloc_targets[i] = bswap_32(out->reloc_targets[i]);
+        out->reloc_targets[i] = dat_be32u(out->reloc_targets[i]);
     qsort(out->reloc_targets, reloc_count, sizeof(DatRef), reloc_cmp);
 
     // root table ----------
@@ -89,8 +89,8 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out)
     if (out->root_info == NULL) { dat_file_destroy(out); return DAT_ERR_ALLOCATION_FAILURE; }
     memcpy(out->root_info, file + root_offset, root_size);
     for (uint32_t i = 0; i < root_count; ++i) {
-        out->root_info[i].data_offset = bswap_32(out->root_info[i].data_offset);
-        out->root_info[i].symbol_offset = bswap_32(out->root_info[i].symbol_offset);
+        out->root_info[i].data_offset = dat_be32u(out->root_info[i].data_offset);
+        out->root_info[i].symbol_offset = dat_be32u(out->root_info[i].symbol_offset);
     }
     qsort(out->root_info, root_count, sizeof(DatRootInfo), root_cmp);
 
@@ -104,8 +104,8 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out)
     if (out->extern_info == NULL) { dat_file_destroy(out); return DAT_ERR_ALLOCATION_FAILURE; }
     memcpy(out->extern_info, file + extern_offset, extern_size);
     for (uint32_t i = 0; i < extern_count; ++i) {
-        out->extern_info[i].data_offset = bswap_32(out->extern_info[i].data_offset);
-        out->extern_info[i].symbol_offset = bswap_32(out->extern_info[i].symbol_offset);
+        out->extern_info[i].data_offset = dat_be32u(out->extern_info[i].data_offset);
+        out->extern_info[i].symbol_offset = dat_be32u(out->extern_info[i].symbol_offset);
     }
     qsort(out->extern_info, extern_count, sizeof(DatExternInfo), extern_cmp);
 
@@ -135,7 +135,7 @@ DAT_RET dat_file_import(const uint8_t *file, uint32_t buffer_size, DatFile *out)
     qsort(out->objects, object_i, sizeof(DatRef), reloc_cmp);
     
     // deduplicate refs
-    DatRef last_ref = 0;
+    DatRef last_ref = 0xFFFFFFFF;
     uint32_t head_i = 0; 
     uint32_t base_i = 0;
     while (head_i < object_i) {
@@ -232,40 +232,37 @@ DAT_RET dat_file_debug_print(DatFile *dat) {
     if (dat == NULL) return DAT_ERR_NULL_PARAM;
 
     printf("DEBUG DAT @ %p:\n", (void*)dat);
-    printf("  data          %p\n", (void*)dat->data         );
-    printf("  reloc_targets %p\n", (void*)dat->reloc_targets);
-    printf("  root_info     %p\n", (void*)dat->root_info    );
-    printf("  extern_info   %p\n", (void*)dat->extern_info  );
-    printf("  symbols       %p\n", (void*)dat->symbols      );
-    printf("  objects       %p\n", (void*)dat->objects      );
+    printf("MEMBER data          %p\n", (void*)dat->data         );
+    printf("MEMBER reloc_targets %p\n", (void*)dat->reloc_targets);
+    printf("MEMBER root_info     %p\n", (void*)dat->root_info    );
+    printf("MEMBER extern_info   %p\n", (void*)dat->extern_info  );
+    printf("MEMBER symbols       %p\n", (void*)dat->symbols      );
+    printf("MEMBER objects       %p\n", (void*)dat->objects      );
 
-    printf("  data_size       %u\n", dat->data_size      );
-    printf("  reloc_count     %u\n", dat->reloc_count    );
-    printf("  root_count      %u\n", dat->root_count     );
-    printf("  extern_count    %u\n", dat->extern_count   );
-    printf("  symbol_size     %u\n", dat->symbol_size    );
-    printf("  object_count    %u\n", dat->object_count   );
+    printf("MEMBER data_size       %u\n", dat->data_size      );
+    printf("MEMBER reloc_count     %u\n", dat->reloc_count    );
+    printf("MEMBER root_count      %u\n", dat->root_count     );
+    printf("MEMBER extern_count    %u\n", dat->extern_count   );
+    printf("MEMBER symbol_size     %u\n", dat->symbol_size    );
+    printf("MEMBER object_count    %u\n", dat->object_count   );
     
-    printf("  data_capacity   %u\n", dat->data_capacity  );
-    printf("  reloc_capacity  %u\n", dat->reloc_capacity );
-    printf("  root_capacity   %u\n", dat->root_capacity  );
-    printf("  extern_capacity %u\n", dat->extern_capacity);
-    printf("  symbol_capacity %u\n", dat->symbol_capacity);
-    printf("  object_capacity %u\n", dat->object_capacity);
+    printf("MEMBER data_capacity   %u\n", dat->data_capacity  );
+    printf("MEMBER reloc_capacity  %u\n", dat->reloc_capacity );
+    printf("MEMBER root_capacity   %u\n", dat->root_capacity  );
+    printf("MEMBER extern_capacity %u\n", dat->extern_capacity);
+    printf("MEMBER symbol_capacity %u\n", dat->symbol_capacity);
+    printf("MEMBER object_capacity %u\n", dat->object_capacity);
 
-    printf("  ROOTS:\n");
     for (uint32_t i = 0; i < dat->root_count; ++i) {
         DatRootInfo info = dat->root_info[i];
-        printf("    %06x %s\n", info.data_offset, &dat->symbols[info.symbol_offset]);
+        printf("ROOT %06x %s\n", info.data_offset, &dat->symbols[info.symbol_offset]);
     }
     
-    printf("  EXTERNAL REFS:\n");
     for (uint32_t i = 0; i < dat->extern_count; ++i) {
         DatExternInfo info = dat->extern_info[i];
-        printf("    %06x %s\n", info.data_offset, &dat->symbols[info.symbol_offset]);
+        printf("EXTERN %06x %s\n", info.data_offset, &dat->symbols[info.symbol_offset]);
     }
     
-    printf("  OBJECTS:\n");
     for (uint32_t i = 0; i < dat->object_count; ++i) {
         DatRef object = dat->objects[i];
         DatRef end;
@@ -273,7 +270,7 @@ DAT_RET dat_file_debug_print(DatFile *dat) {
             end = dat->objects[i+1];
         else
             end = dat->data_size;
-        printf("    %06x (%u)\n", object, end-object);
+        printf("OBJECT %06x (%u)\n", object, end-object);
     }
 
     return DAT_SUCCESS;
@@ -457,6 +454,30 @@ DAT_RET dat_root_remove(DatFile *dat, uint32_t index) {
     dat->root_count--;
 
     return DAT_SUCCESS;
+}
+
+DAT_RET dat_root_find(DatFile *dat, const char *root_name, DatRef *out) {
+    if (dat == NULL) return DAT_ERR_NULL_PARAM;
+    if (root_name == NULL) return DAT_ERR_NULL_PARAM;
+    if (out == NULL) return DAT_ERR_NULL_PARAM;
+    
+    for (uint32_t root_i = 0; root_i < dat->root_count; ++root_i) {
+        DatRootInfo info = dat->root_info[root_i];
+        char *root_name_to_check = &dat->symbols[info.symbol_offset];
+        
+        for (uint64_t i = 0; ; ++i) {
+            char a = root_name_to_check[i];
+            char b = root_name[i];
+            
+            if (a != b) break;
+            if (a == 0) {
+                *out = info.data_offset;
+                return DAT_SUCCESS;
+            };
+        }
+    }
+    
+    return DAT_NOT_FOUND;
 }
 
 DAT_RET dat_obj_location(const DatFile *dat, DatRef ptr, DatSlice *out) {

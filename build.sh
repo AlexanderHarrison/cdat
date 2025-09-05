@@ -11,9 +11,16 @@ fi
 PATH_FLAGS="-I/usr/include -I/usr/lib -I/usr/local/lib -I/usr/local/include"
 LINK_FLAGS=""
 
-/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/mod.c ${LINK_FLAGS} -o build/dat_mod
-/usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/hmex.c ${LINK_FLAGS} -o build/hmex
+if [[ -z $1 || $1 = 'release' || $1 = 'dat_mod' ]]; then
+    /usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/mod.c ${LINK_FLAGS} -o build/dat_mod
+fi
+if [[ -z $1 || $1 = 'release' || $1 = 'hmex' ]]; then
+    /usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/hmex.c ${LINK_FLAGS} -o build/hmex
+fi
+if [[ -z $1 || $1 = 'release' || $1 = 'ml' ]]; then
+    /usr/bin/c99 ${WARN_FLAGS} ${PATH_FLAGS} ${BASE_FLAGS} src/ml.c ${LINK_FLAGS} -o build/ml # TEMP
+fi
 
 if [ "$1" = 'release' ]; then
-    strip build/dat_mod build/hmex
+    strip build/dat_mod build/hmex build/ml
 fi

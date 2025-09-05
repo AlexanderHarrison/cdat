@@ -5,22 +5,31 @@
 #include <stdbool.h>
 #include <string.h>
 
-#if defined(WIN32) || defined(_WIN32)
-    #define bswap_16(x) _byteswap_ushort(x)
-    #define bswap_32(x) _byteswap_ulong(x)
-#else
-    #include <byteswap.h>
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    #if defined(WIN32) || defined(_WIN32)
+        #define dat_be16u(x) _byteswap_ushort(x)
+        #define dat_be32u(x) _byteswap_ulong(x)
+    #else
+        #include <byteswap.h>
+        #define dat_be16u(x) bswap_16(x)
+        #define dat_be32u(x) bswap_32(x)
+    #endif
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    #define dat_be16u(x) (x)
+    #define dat_be32u(x) (x)
+#else 
+    #error "Please define __BYTE_ORDER__ to either __ORDER_LITTLE_ENDIAN__ or __ORDER_BIG_ENDIAN__"
 #endif
 
-#define READ_U16(ptr) bswap_16(*(const uint16_t*)(ptr))
-#define READ_I16(ptr) ((int16_t)bswap_16(*(const uint16_t*)(ptr)))
-#define READ_U32(ptr) bswap_32(*(const uint32_t*)(ptr))
-#define READ_I32(ptr) ((int32_t)bswap_32(*(const uint32_t*)(ptr)))
+#define READ_U16(ptr) dat_be16u(*(const uint16_t*)(ptr))
+#define READ_I16(ptr) ((int16_t)dat_be16u(*(const uint16_t*)(ptr)))
+#define READ_U32(ptr) dat_be32u(*(const uint32_t*)(ptr))
+#define READ_I32(ptr) ((int32_t)dat_be32u(*(const uint32_t*)(ptr)))
 
-#define WRITE_U16(ptr, data) (*((uint16_t*)(ptr)) = bswap_16(data))
-#define WRITE_I16(ptr, data) (*((int16_t*)(ptr)) = (int16_t)bswap_16(data))
-#define WRITE_U32(ptr, data) (*((uint32_t*)(ptr)) = bswap_32(data))
-#define WRITE_I32(ptr, data) (*((int32_t*)(ptr)) = (int32_t)bswap_32(data))
+#define WRITE_U16(ptr, data) (*((uint16_t*)(ptr)) = dat_be16u(data))
+#define WRITE_I16(ptr, data) (*((int16_t*)(ptr)) = (int16_t)dat_be16u(data))
+#define WRITE_U32(ptr, data) (*((uint32_t*)(ptr)) = dat_be32u(data))
+#define WRITE_I32(ptr, data) (*((int32_t*)(ptr)) = (int32_t)dat_be32u(data))
 
 // TYPES ##########################################################
 
@@ -141,6 +150,9 @@ DAT_RET dat_root_add(DatFile *dat, uint32_t index, DatRef root_obj, const char *
 
 // Removes the root at the specified index.
 DAT_RET dat_root_remove(DatFile *dat, uint32_t root_index);
+
+// Returns DAT_NOT_FOUND if the dat file does not contain a root with this name.
+DAT_RET dat_root_find(DatFile *dat, const char *root_name, DatRef *out);
 
 // Copies the source object and all its children to the reference destination dat file.
 // Puts a reference to the copied object in dst_out.
