@@ -120,7 +120,7 @@ int main(int argc, const char *argv[]) {
                     }
                 }
                 
-                printf("%06x  %8x", i, word);
+                printf("%2x  %8x", i - object.offset, word);
                 
                 if (is_ref) {
                     DatSlice ref;
